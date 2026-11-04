@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -9,51 +9,62 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2330d158'/%3E%3Cpath d='M16 8v8l5 3' stroke='%23000' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 /* ==========================================================================
-   1. THEME TOKENS (CSS variables). JS sets <html data-theme="dark|light|contrast">
+   1. THEME TOKENS (CSS variables). JS sets <html data-theme="light|dark|contrast">.
+      "light" is Paper (the default :root), "dark" is Ink.
    ========================================================================== */
 :root {
-  --bg: #0a0c0f;
-  --surface: #13171c;
-  --surface-2: #1b2128;
-  --border: #2b343e;
-  --fg: #f4f6f8;
-  --muted: #98a4b1;
-  --accent: #4cc2ff;
-  --on-accent: #001018;
-  --green: #33e374;
-  --yellow: #ffd60a;
+  --bg: #ebe6d6;            /* page */
+  --surface: #f8f5ea;       /* panels */
+  --surface-2: #e0dac6;
+  --field: #fffdf4;         /* inputs */
+  --border: #161510;        /* ink */
+  --fg: #161510;
+  --muted: #5e594a;
+  --grid: rgba(22, 21, 16, .07);
+  --shadow-color: #161510;
+  --accent: #ff5a1f;
+  --on-accent: #161510;
+  --green: #0f9d4f;
+  --yellow: #f2b705;
   --on-yellow: #161200;
-  --red: #ff3b30;
+  --red: #e5391d;
   --on-red: #ffffff;
-  --radius: 14px;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color-scheme: dark;
-}
-:root[data-theme="light"] {
-  --bg: #f3f5f8;
-  --surface: #ffffff;
-  --surface-2: #eef1f5;
-  --border: #cfd6df;
-  --fg: #0d1117;
-  --muted: #566170;
-  --accent: #0b64c0;
-  --on-accent: #ffffff;
-  --green: #0a8a38;
-  --yellow: #ffd60a;
-  --on-yellow: #161200;
-  --red: #d92d20;
-  --on-red: #ffffff;
+  --radius: 0px;
+  --sans: "Helvetica Neue", Helvetica, Arial, "Segoe UI", system-ui, sans-serif;
+  --display: "Arial Black", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
   color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #14130f;
+  --surface: #1d1b15;
+  --surface-2: #2a271d;
+  --field: #0d0c09;
+  --border: #ebe5cf;
+  --fg: #f1ecda;
+  --muted: #a49e88;
+  --grid: rgba(235, 229, 207, .05);
+  --shadow-color: #3b3727;
+  --accent: #ff6a2b;
+  --on-accent: #14130f;
+  --green: #46ff8e;
+  --yellow: #ffd21f;
+  --on-yellow: #141100;
+  --red: #ff4a36;
+  --on-red: #ffffff;
+  color-scheme: dark;
 }
 :root[data-theme="contrast"] {
   --bg: #000000;
   --surface: #000000;
   --surface-2: #111111;
+  --field: #000000;
   --border: #ffffff;
   --fg: #ffffff;
-  --muted: #d0d0d0;
-  --accent: #00e5ff;
+  --muted: #d6d6d6;
+  --grid: rgba(255, 255, 255, .08);
+  --shadow-color: #ffffff;
+  --accent: #ffe600;
   --on-accent: #000000;
   --green: #00ff5a;
   --yellow: #ffee00;
@@ -350,18 +361,99 @@ body.stage-mode.hud-on:has(.stage[data-message="on"]) .hud { transform: translat
 .bg-row input[type="range"] { width: 120px; }
 label.btn { cursor: pointer; }
 label.btn:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* ==========================================================================
+   12. CONTROL-DESK SKIN: flat, square, ink-on-paper hardware-panel look.
+       Hard offset shadows, mono labels, drafting-grid page, LCD readouts.
+   ========================================================================== */
+body {
+  font-family: var(--sans);
+  background-color: var(--bg);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.topbar { border-bottom: 4px solid var(--border); padding-bottom: 14px; margin-bottom: 22px; }
+.topbar h1 { font: 900 clamp(1.5rem, 3.4vw, 2.3rem)/1 var(--display); text-transform: uppercase; letter-spacing: -.03em; gap: 0; }
+.topbar h1 em { font-style: normal; color: var(--accent); padding: 0 .1em; }
+.topbar h1 .tag { font: 700 .62rem var(--mono); letter-spacing: .16em; margin-left: 14px; padding: 3px 8px; border: 2px solid var(--border); align-self: center; }
+.logo { width: 16px; height: 16px; border-radius: 0; margin-right: 64px; background: var(--green); box-shadow: 24px 0 0 var(--yellow), 48px 0 0 var(--red); }
+
+.card { border: 2px solid var(--border); border-radius: 0; background: var(--surface); box-shadow: 6px 6px 0 var(--shadow-color); }
+.card h2 { margin: -16px -16px 14px; padding: 7px 12px; background: var(--fg); color: var(--bg); font: 700 .72rem var(--mono); letter-spacing: .16em; }
+.card h2 small { color: inherit; opacity: .8; font-family: var(--mono); }
+.timer-card { border-width: 2px; }
+.timer-card.selected { border-color: var(--border); box-shadow: 8px 8px 0 var(--accent); }
+
+.btn {
+  border: 2px solid var(--border); border-radius: 0; background: var(--surface); color: var(--fg);
+  box-shadow: 3px 3px 0 var(--shadow-color);
+  font-family: var(--mono); font-weight: 700; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em;
+  transition: none;
+}
+.btn:hover:not(:disabled) { background: var(--accent); color: var(--on-accent); border-color: var(--border); }
+.btn:active:not(:disabled) { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--shadow-color); }
+.btn:disabled { box-shadow: none; opacity: .35; }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--border); font-size: .95rem; }
+.btn.primary:hover:not(:disabled) { background: var(--fg); color: var(--bg); }
+.btn.small { font-size: .7rem; min-height: 36px; }
+.btn.danger:hover:not(:disabled) { background: var(--red); color: #fff; }
+.hud { border-radius: 0; border: 2px solid #f4f0e1; background: rgba(13, 12, 9, .88); }
+.hud .btn { background: #1b1913; color: #f4f0e1; border-color: #f4f0e1; box-shadow: none; }
+.hud .btn:hover:not(:disabled) { background: #ff5a1f; color: #14130f; }
+.hud .btn.primary { background: #ff5a1f; color: #14130f; border-color: #f4f0e1; }
+
+input[type="text"], input[inputmode], select {
+  border: 2px solid var(--border); border-radius: 0; background: var(--field); color: var(--fg);
+  font-family: var(--mono); font-size: .88rem;
+}
+input[type="text"]:focus, select:focus { border-color: var(--border); box-shadow: 3px 3px 0 var(--accent); outline: none; }
+legend, .lbl, .seg label span { font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; font-size: .66rem; color: var(--muted); }
+.segmented { border: 2px solid var(--border); border-radius: 0; }
+.segmented span { background: var(--surface-2); font-family: var(--mono); font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; }
+.segmented input:checked + span { background: var(--accent); color: var(--on-accent); }
+.opt b { font-family: var(--mono); font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; }
+input[type="range"] { accent-color: var(--accent); }
+
+.seg { border: 2px solid var(--border); border-radius: 0; background: var(--field); }
+.seg.active { border-color: var(--border); box-shadow: inset 7px 0 0 var(--accent); }
+.seg-num { border-radius: 0; border: 2px solid var(--border); background: var(--surface-2); font-family: var(--mono); color: var(--fg); }
+.seg.active .seg-num { background: var(--accent); color: var(--on-accent); border-color: var(--border); }
+.dot { border-radius: 0; border: 2px solid var(--border); width: 16px; height: 16px; }
+.readout {
+  padding: 3px 10px; background: #0d0c09; color: #46ff8e; border: 2px solid var(--border);
+  font-weight: 800; letter-spacing: .04em; text-shadow: 0 0 8px rgba(70, 255, 142, .45);
+}
+.timer-card[data-state="yellow"] .readout { color: #ffd21f; text-shadow: 0 0 8px rgba(255, 210, 31, .45); }
+.timer-card[data-state="red"] .readout, .timer-card[data-state="overtime"] .readout, .timer-card[data-state="finished"] .readout { color: #ff4a36; text-shadow: 0 0 8px rgba(255, 74, 54, .5); }
+.timer-card[data-state="idle"] .readout { color: #f4f0e1; text-shadow: none; }
+kbd { border-radius: 0; border: 2px solid var(--border); background: var(--field); font-family: var(--mono); }
+.bg-thumb { border-radius: 0; border: 2px solid var(--border); }
+.timer-opts label.chk { font-family: var(--mono); font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+.timer-opts input[type=checkbox] { accent-color: var(--accent); }
+.toast { border-radius: 0; background: var(--fg); color: var(--bg); border: 2px solid var(--border); box-shadow: 4px 4px 0 var(--accent); font: 700 .8rem var(--mono); text-transform: uppercase; letter-spacing: .04em; }
+.msg-status { font-family: var(--mono); font-size: .7rem; }
+.preset-meta { font-family: var(--mono); font-size: .7rem; }
+
+/* The stage keeps its own dark, high-contrast palette in every theme, like a physical display */
+.stage {
+  --bg: #0d0c09; --fg: #f4f0e1; --green: #46ff8e; --yellow: #ffd21f; --on-yellow: #141100; --red: #ff3d2a; --on-red: #ffffff;
+  border: 4px solid var(--border); border-radius: 0; box-shadow: 8px 8px 0 var(--shadow-color);
+}
+body.stage-mode .stage { border: 0; box-shadow: none; }
+.stage-top { font-family: var(--display); font-weight: 900; letter-spacing: .03em; }
+.stage-bottom { font-family: var(--mono); }
 </style>
 </head>
 <body>
 
 <div class="app" id="app">
   <header class="topbar">
-    <h1><span class="logo" aria-hidden="true"></span>Speaker Timer</h1>
+    <h1><span class="logo" aria-hidden="true"></span>Speaker<em>/</em>Timer<span class="tag">Control desk</span></h1>
     <div class="top-actions">
       <label class="sr-only" for="themeSelect">Theme</label>
       <select id="themeSelect" style="width:auto">
-        <option value="dark">Dark</option>
-        <option value="light">Light</option>
+        <option value="light">Paper</option>
+        <option value="dark">Ink (dark)</option>
         <option value="contrast">High contrast</option>
         <option value="auto">Match system</option>
       </select>
@@ -555,7 +647,7 @@ function createDefaultTimers() {
 
 function createDefaultSettings() {
   return {
-    theme: 'dark',            // dark | light | contrast | auto
+    theme: 'light',           // light (Paper) | dark (Ink) | contrast | auto
     sound: true, volume: 0.6, showMs: false, showLabels: true, messageSeconds: 15, recentMessages: [],
     defaultWarn: 120, defaultRed: 30,
     timers: createDefaultTimers(),
@@ -1008,7 +1100,7 @@ function layoutStage() {
   stageEl.style.setProperty('--cols', bestCols);
   stageEl.style.setProperty('--rows', rows);
   stageEl.style.setProperty('--gap', n > 1 ? 'max(0.9vmin, 6px)' : '0px');
-  stageEl.style.setProperty('--tile-r', n > 1 ? '14px' : '0px');
+  stageEl.style.setProperty('--tile-r', '0px');
   // A lone tile on the last row stretches across the row
   tiles.forEach((tile, i) => { tile.el.style.gridColumn = i === n - 1 ? `span ${bestCols - ((n - 1) % bestCols)}` : ''; });
 }
