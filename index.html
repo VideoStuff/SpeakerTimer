@@ -1,0 +1,2067 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="description" content="Speaker Timer: a stage-ready countdown timer with traffic-light alerts, chained segments, audio chimes and a full-screen stage display.">
+<title>Speaker Timer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2330d158'/%3E%3Cpath d='M16 8v8l5 3' stroke='%23000' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ==========================================================================
+   1. THEME TOKENS (CSS variables). JS sets <html data-theme="dark|light|contrast">
+   ========================================================================== */
+:root {
+  --bg: #0a0c0f;
+  --surface: #13171c;
+  --surface-2: #1b2128;
+  --border: #2b343e;
+  --fg: #f4f6f8;
+  --muted: #98a4b1;
+  --accent: #4cc2ff;
+  --on-accent: #001018;
+  --green: #33e374;
+  --yellow: #ffd60a;
+  --on-yellow: #161200;
+  --red: #ff3b30;
+  --on-red: #ffffff;
+  --radius: 14px;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --surface-2: #eef1f5;
+  --border: #cfd6df;
+  --fg: #0d1117;
+  --muted: #566170;
+  --accent: #0b64c0;
+  --on-accent: #ffffff;
+  --green: #0a8a38;
+  --yellow: #ffd60a;
+  --on-yellow: #161200;
+  --red: #d92d20;
+  --on-red: #ffffff;
+  color-scheme: light;
+}
+:root[data-theme="contrast"] {
+  --bg: #000000;
+  --surface: #000000;
+  --surface-2: #111111;
+  --border: #ffffff;
+  --fg: #ffffff;
+  --muted: #d0d0d0;
+  --accent: #00e5ff;
+  --on-accent: #000000;
+  --green: #00ff5a;
+  --yellow: #ffee00;
+  --on-yellow: #000000;
+  --red: #ff2a2a;
+  --on-red: #ffffff;
+  color-scheme: dark;
+}
+
+/* ==========================================================================
+   2. BASE
+   ========================================================================== */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.45 var(--sans);
+  min-height: 100vh;
+}
+body.stage-mode { overflow: hidden; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ==========================================================================
+   3. STAGE DISPLAY: a grid of timer tiles. Each tile is its own size container,
+      so every measurement inside scales with the tile (1 timer or 12).
+   ========================================================================== */
+.stage-wrap { position: relative; aspect-ratio: 16 / 9; width: 100%; }
+.stage {
+  --cols: 1; --rows: 1; --gap: 0px; --tile-r: 0px;
+  position: absolute; inset: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rows), minmax(0, 1fr));
+  gap: var(--gap); padding: var(--gap);
+  background: color-mix(in srgb, var(--fg) 16%, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden; user-select: none;
+}
+body.stage-mode .stage { position: fixed; inset: 0; z-index: 100; border: 0; border-radius: 0; }
+.tile {
+  --chars: 5;
+  container-type: size;
+  min-width: 0; min-height: 0;
+  background: var(--bg); color: var(--fg);
+  border-radius: var(--tile-r);
+  overflow: hidden;
+  transition: background-color .35s ease, color .35s ease;
+}
+.stage-inner {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 2cqmin;
+  padding: 3.5cqmin 4cqmin;
+}
+.stage-top {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 2cqmin;
+  font-size: max(5.5cqmin, 13px);
+  font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+}
+.stage[data-labels="off"] .stage-label { visibility: hidden; }
+.stage-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage-counter { opacity: .75; white-space: nowrap; font-size: .75em; }
+.stage-time {
+  align-self: center; justify-self: center;
+  font-family: var(--mono); font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+  /* ~0.6em per monospace glyph: 150cqw / chars keeps the digits inside ~90% of the width */
+  font-size: min(calc(150cqw / var(--chars)), 58cqh);
+  transition: opacity .2s;
+}
+.stage-time .ms { font-size: .4em; opacity: .8; }
+.stage-bottom { display: grid; gap: 1.6cqmin; font-size: max(3.8cqmin, 11px); font-weight: 600; }
+.stage-info { display: flex; justify-content: space-between; gap: 2cqmin; min-height: 1.4em; }
+.stage-info span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage-status { text-transform: uppercase; letter-spacing: .06em; }
+.progress { height: max(1.6cqmin, 5px); border-radius: 99px; overflow: hidden; background: color-mix(in srgb, currentColor 22%, transparent); }
+.progress-fill { height: 100%; width: 100%; background: currentColor; transform-origin: left center; transform: scaleX(0); }
+
+/* Traffic-light states */
+.tile[data-state="idle"]     { color: var(--fg); }
+.tile[data-state="green"]    { color: var(--green); }
+.tile[data-state="yellow"]   { background: var(--yellow); color: var(--on-yellow); }
+.tile[data-state="red"]      { background: var(--red);    color: var(--on-red); }
+.tile[data-state="finished"] { color: var(--red); }
+.tile[data-state="overtime"] { animation: overtime-flash 1s steps(1, end) infinite; }
+.tile[data-status="paused"] .stage-time { opacity: .5; }
+.tile[data-status="paused"][data-state="overtime"] { animation-play-state: paused; }
+@keyframes overtime-flash {
+  0%   { background: var(--red);    color: var(--on-red); }
+  50%  { background: var(--on-red); color: var(--red); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile { transition: none; }
+  .tile[data-state="overtime"] { animation: none; background: var(--red); color: var(--on-red); }
+}
+@supports not (width: 1cqw) {
+  .stage-inner { padding: 2vmin 3vmin; }
+  .stage-time { font-size: min(calc(100vw / var(--chars)), 40vh); }
+  .stage-top, .stage-bottom { font-size: 2.4vmin; }
+}
+
+/* Floating controls shown over the stage when the mouse moves */
+.hud {
+  position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px);
+  z-index: 110; display: none; flex-wrap: wrap; justify-content: center; gap: 8px;
+  padding: 10px; border-radius: 16px;
+  background: color-mix(in srgb, #000 78%, transparent); backdrop-filter: blur(8px);
+  opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
+  max-width: calc(100vw - 24px);
+}
+.hud .btn { background: #20262d; color: #fff; border-color: #3a444f; min-height: 42px; }
+.hud .btn.primary { background: #4cc2ff; color: #001018; border-color: transparent; }
+body.stage-mode .hud { display: flex; }
+body.stage-mode.hud-on .hud { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+body.stage-mode:not(.hud-on) { cursor: none; }
+
+/* Dedicated stage window (?stage=1) shows nothing but the stage */
+/* (the stage lives inside .app, so hide its siblings rather than .app itself) */
+body.stage-only .topbar,
+body.stage-only .col-side,
+body.stage-only .col-main > :not(.stage-wrap) { display: none; }
+body.stage-only .app { padding: 0; }
+
+/* ==========================================================================
+   4. CONTROL DASHBOARD
+   ========================================================================== */
+.app { max-width: 1500px; margin: 0 auto; padding: 16px; }
+.topbar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 16px;
+}
+.topbar h1 { margin: 0; font-size: 1.35rem; letter-spacing: .01em; display: flex; align-items: center; gap: 10px; }
+.logo { width: 14px; height: 14px; border-radius: 50%; background: var(--green); box-shadow: 22px 0 0 var(--yellow), 44px 0 0 var(--red); margin-right: 48px; }
+.top-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
+.col-main, .col-side { display: grid; gap: 16px; min-width: 0; }
+@media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px;
+}
+.card h2 { margin: 0 0 12px; font-size: 1rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.card h2 small { font-size: .8rem; letter-spacing: 0; text-transform: none; font-weight: 500; }
+
+.btn {
+  min-height: 46px; padding: 0 16px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--fg);
+  font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: border-color .15s, transform .05s, background-color .15s;
+}
+.btn:hover:not(:disabled) { border-color: var(--muted); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; min-width: 170px; font-size: 1.15rem; }
+.btn.small { min-height: 36px; padding: 0 12px; font-size: .875rem; border-radius: 10px; }
+.btn.icon { min-width: 36px; padding: 0; }
+.btn.danger:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+.btn-group { display: inline-flex; gap: 6px; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.hint { margin: 0; color: var(--muted); font-size: .85rem; }
+kbd { font: .8em var(--mono); padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; background: var(--surface-2); }
+
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+legend, .lbl { font-size: .8rem; font-weight: 600; color: var(--muted); padding: 0; margin-bottom: 6px; }
+.field { margin-bottom: 14px; }
+input[type="text"], input[inputmode], select {
+  width: 100%; min-height: 40px; padding: 6px 10px; border-radius: 10px;
+  background: var(--bg); border: 1px solid var(--border); color: var(--fg);
+}
+input[type="text"]:focus, select:focus { border-color: var(--accent); }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.segmented label { display: block; }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented span { display: block; padding: 9px 16px; cursor: pointer; font-weight: 600; background: var(--surface-2); }
+.segmented input:checked + span { background: var(--accent); color: var(--on-accent); }
+.segmented input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: -3px; }
+.opt { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; cursor: pointer; }
+.opt input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
+.opt b { display: block; font-weight: 600; }
+.opt small { color: var(--muted); }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.row-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* Segment (chained timer) editor */
+.seg-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+.seg {
+  display: grid; gap: 8px 10px; align-items: end; padding: 10px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--bg);
+  grid-template-columns: auto minmax(120px, 1fr) repeat(3, minmax(64px, 84px)) auto;
+}
+.seg.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.seg label span { display: block; font-size: .72rem; color: var(--muted); margin-bottom: 3px; }
+.seg input { min-height: 38px; }
+.seg-num { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-2); font-weight: 700; cursor: pointer; }
+.seg.active .seg-num { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.seg-tools { display: flex; gap: 4px; }
+@media (max-width: 560px) {
+  .seg { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .seg-num { order: 1; }
+  .seg-tools { order: 2; grid-column: 2 / -1; justify-content: flex-end; align-self: center; }
+  .seg .f-name { order: 3; grid-column: 1 / -1; }
+  .seg > label { order: 4; min-width: 0; }
+}
+.preset-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.preset-list li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+.preset-list .btn:first-child { justify-content: flex-start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preset-meta { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+.empty { color: var(--muted); font-size: .9rem; margin: 12px 0 0; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 30px);
+  background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 10px;
+  font-weight: 600; opacity: 0; pointer-events: none; z-index: 200;
+  transition: opacity .2s, transform .2s; max-width: calc(100vw - 32px);
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* Timer cards */
+.timer-list { display: grid; gap: 16px; }
+.timer-card { padding: 14px; border-width: 2px; }
+.timer-card.selected { border-color: var(--accent); }
+.timer-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.dot { width: 14px; height: 14px; border-radius: 50%; flex: none; background: var(--muted); }
+.timer-card[data-state="green"] .dot { background: var(--green); }
+.timer-card[data-state="yellow"] .dot { background: var(--yellow); }
+.timer-card[data-state="red"] .dot, .timer-card[data-state="overtime"] .dot, .timer-card[data-state="finished"] .dot { background: var(--red); }
+.timer-head input { font-weight: 700; font-size: 1.05rem; flex: 1; min-width: 0; }
+.readout { font: 700 1.4rem var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timer-opts { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin: 12px 0; }
+.timer-opts select { width: auto; }
+.timer-opts label.chk { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; font-size: .9rem; }
+.timer-opts input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+.timer-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.timer-foot .hint { margin: 0; }
+.timer-card .seg-list { margin-bottom: 10px; }
+
+.timer-card.dragging, .tile.dragging { opacity: .45; }
+.timer-card.drop-before { box-shadow: 0 -4px 0 0 var(--accent); }
+.timer-card.drop-after  { box-shadow: 0 4px 0 0 var(--accent); }
+.tile.drop-target { outline: 4px solid var(--accent); outline-offset: -4px; }
+body:not(.stage-only) .tile { cursor: grab; }
+
+/* The stage is a size container so the message banner can use cq units */
+.stage { container-type: size; }
+
+/* Message to speaker: a banner that slides up over the bottom of the stage */
+.banner {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+  display: grid; place-items: center; padding: 2.5cqmin 4cqmin;
+  background: #fff; color: #000; border-top: max(.8cqmin, 4px) solid #ff3b30;
+  font-weight: 900; text-align: center; text-transform: uppercase; line-height: 1.1;
+  font-size: min(7cqw, 13cqh); max-height: 45cqh; overflow: hidden; text-wrap: balance;
+  transform: translateY(105%); transition: transform .35s ease; pointer-events: none;
+}
+.stage[data-message="on"] .banner { transform: none; animation: banner-pulse 1.2s ease-in-out infinite; }
+@keyframes banner-pulse { 50% { background: #ffd60a; } }
+@media (prefers-reduced-motion: reduce) { .stage[data-message="on"] .banner { animation: none; } }
+/* keep the floating controls off the banner while a message is showing */
+body.stage-mode:has(.stage[data-message="on"]) .hud { bottom: auto; top: 24px; transform: translate(-50%, -20px); }
+body.stage-mode.hud-on:has(.stage[data-message="on"]) .hud { transform: translate(-50%, 0); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { min-height: 36px; }
+.msg-status { color: var(--accent); font-weight: 700; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Background images: sit under the clock, dimmed by a per-timer scrim.
+   Yellow / red / overtime fade the picture right back so the alert is unmistakable. */
+.tile-bg {
+  position: absolute; inset: 0; opacity: 0; pointer-events: none;
+  background-size: cover; background-position: center; transition: opacity .35s ease;
+}
+.tile-bg::after { content: ""; position: absolute; inset: 0; background: rgba(0, 0, 0, var(--dim, .5)); }
+.tile { position: relative; }
+.stage-inner { position: relative; z-index: 1; }
+.tile[data-bg="on"] { --green: #4dff8a; }
+.tile[data-bg="on"] .tile-bg { opacity: 1; }
+.tile[data-bg="on"][data-state="idle"] { color: #fff; }
+.tile[data-bg="on"][data-state="yellow"] .tile-bg,
+.tile[data-bg="on"][data-state="red"] .tile-bg,
+.tile[data-bg="on"][data-state="overtime"] .tile-bg { opacity: .15; }
+.tile[data-bg="on"]:not([data-state="yellow"]) .stage-inner { text-shadow: 0 .3cqmin 1.2cqmin rgba(0, 0, 0, .65); }
+.bg-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; }
+.bg-thumb { width: 64px; height: 36px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+.bg-row input[type="range"] { width: 120px; }
+label.btn { cursor: pointer; }
+label.btn:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <header class="topbar">
+    <h1><span class="logo" aria-hidden="true"></span>Speaker Timer</h1>
+    <div class="top-actions">
+      <label class="sr-only" for="themeSelect">Theme</label>
+      <select id="themeSelect" style="width:auto">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="contrast">High contrast</option>
+        <option value="auto">Match system</option>
+      </select>
+      <button class="btn small" data-action="mute" id="btnMute" aria-pressed="false">Sound on</button>
+      <button class="btn small" data-action="popup" title="Open the stage display in its own window, e.g. for a projector">Stage window</button>
+      <button class="btn small primary" data-action="stage" style="min-width:0" title="Full-screen stage display (F)">Stage display</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ================= LEFT: stage preview, global controls, timers ================= -->
+    <section class="col-main" aria-label="Timers">
+      <div class="stage-wrap">
+        <div class="stage" id="stage" data-labels="on" data-message="off" role="group" aria-label="Timer display"><div class="banner" id="banner" aria-hidden="true"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="controls" role="group" aria-label="All timers">
+          <button class="btn primary" data-action="toggleAll"><span data-toggle-all-label>Start all</span></button>
+          <button class="btn" data-action="resetAll" title="Reset every timer to its first segment (Shift+R)">Reset all</button>
+          <button class="btn" data-action="addTimer">+ Add timer</button>
+        </div>
+        <p class="hint" style="margin-top:12px">
+          <kbd>Space</kbd> start/pause all &middot; <kbd>1</kbd>&ndash;<kbd>9</kbd> start/pause that timer &middot;
+          <kbd>R</kbd> reset selected &middot; <kbd>N</kbd>/<kbd>P</kbd> next/prev &middot; <kbd>&uarr;</kbd>/<kbd>&darr;</kbd> &plusmn;1 min (selected timer) &middot;
+          <kbd>F</kbd> stage &middot; <kbd>M</kbd> mute &middot; <kbd>Esc</kbd> exit stage.
+          Drag timers (cards or stage tiles) to reorder them.
+        </p>
+      </div>
+
+      <section class="card" aria-label="Message to speaker">
+        <h2>Message to speaker <small class="msg-status" id="msgStatus"></small></h2>
+        <div class="row-inline" style="flex-wrap:nowrap">
+          <label class="sr-only" for="msgText">Message</label>
+          <input type="text" id="msgText" maxlength="120" placeholder="Type a message for the stage&hellip;" autocomplete="off">
+          <button class="btn primary" style="min-width:0;flex:none" data-action="sendMessage">Send</button>
+          <button class="btn" style="flex:none" data-action="clearMessage" title="Clear the message (C)">Clear</button>
+        </div>
+        <div class="row-inline" style="margin:10px 0">
+          <label class="lbl" for="msgDuration" style="margin:0">Show for</label>
+          <select id="msgDuration" style="width:auto">
+            <option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option>
+            <option value="60">1 minute</option><option value="0">Until cleared</option>
+          </select>
+          <small class="hint">Click a button to send it instantly. Your own messages are remembered.</small>
+        </div>
+        <div class="chips" id="messageChips"></div>
+      </section>
+
+      <div class="timer-list" id="timerList"></div>
+    </section>
+
+    <!-- ================= RIGHT: global settings ================= -->
+    <aside class="col-side" aria-label="Settings">
+      <section class="card">
+        <h2>Display &amp; sound</h2>
+        <label class="opt"><input type="checkbox" id="optLabels"><span><b>Show timer labels on stage</b><small>Print each timer's name above its clock.</small></span></label>
+        <label class="opt"><input type="checkbox" id="optMs"><span><b>Show milliseconds</b><small>Display .000 beside the clocks.</small></span></label>
+        <label class="opt"><input type="checkbox" id="optSound"><span><b>Audio chimes</b><small>Soft beeps at the yellow, red and end marks.</small></span></label>
+        <div class="field" style="margin-top:6px">
+          <label class="lbl" for="optVolume">Chime volume</label>
+          <input type="range" id="optVolume" min="0" max="1" step="0.05">
+          <div class="row-inline" style="margin-top:8px">
+            <span class="lbl" style="margin:0">Preview:</span>
+            <button class="btn small" data-preview="1">Yellow</button>
+            <button class="btn small" data-preview="2">Red</button>
+            <button class="btn small" data-preview="3">End</button>
+          </div>
+        </div>
+        <div class="row">
+          <label><span class="lbl">Default yellow at (time left)</span><input type="text" inputmode="numeric" id="optDefaultWarn" autocomplete="off"></label>
+          <label><span class="lbl">Default red at (time left)</span><input type="text" inputmode="numeric" id="optDefaultRed" autocomplete="off"></label>
+        </div>
+        <p class="hint" style="margin-top:8px">Defaults apply to newly added segments.</p>
+      </section>
+
+      <section class="card">
+        <h2>Presets</h2>
+        <div class="row-inline" style="flex-wrap:nowrap">
+          <label class="sr-only" for="presetName">Preset name</label>
+          <input type="text" id="presetName" maxlength="40" placeholder="Preset name" autocomplete="off">
+          <button class="btn" data-action="savePreset" style="flex:none">Save</button>
+        </div>
+        <ul class="preset-list" id="presetList"></ul>
+        <p class="hint" style="margin-top:12px">A preset stores all timers, labels and segments. Presets, thresholds and theme are saved in this browser and survive refreshes.</p>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<!-- Controls overlaid on the stage in full-screen mode -->
+<div class="hud" id="hud" role="group" aria-label="Stage controls">
+  <button class="btn primary" data-action="toggleAll"><span data-toggle-all-label>Start all</span></button>
+  <button class="btn" data-action="resetAll">Reset all</button>
+  <button class="btn" data-action="sub" title="Remove a minute from the selected timer">&minus;1 min</button>
+  <button class="btn" data-action="add" title="Add a minute to the selected timer">+1 min</button>
+  <button class="btn" data-action="stage" id="hudExit">Exit stage</button>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="sr-only" id="srLive" aria-live="assertive" aria-atomic="true"></div>
+
+<script>
+'use strict';
+/* ==========================================================================
+   SPEAKER TIMER, vanilla JS, no dependencies.
+
+   Several independent timers run side by side. Each timer has a label, a mode,
+   and a chain of segments. Sections:
+     1. Utilities            5. Audio chimes            9. Presets
+     2. Settings + storage   6. Display / rendering    10. Stage mode, windows, sync
+     3. Timer engine         7. Timer cards + editor   11. Events & bootstrap
+     4. Thresholds / tick    8. Settings panel
+   ========================================================================== */
+(() => {
+
+/* ---------- 1. UTILITIES ------------------------------------------------ */
+const STORAGE_KEY = 'speakerTimer.v1';
+const CHANNEL_NAME = 'speakerTimer.sync';
+const IS_STAGE_WINDOW = new URLSearchParams(location.search).has('stage');
+const MAX_SECONDS = 359999;   // 99:59:59
+const MAX_SEGMENTS = 50;
+const MAX_TIMERS = 12;
+
+const $  = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const pad2 = (n) => String(n).padStart(2, '0');
+const pad3 = (n) => String(n).padStart(3, '0');
+const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const imageCache = new Map();   // image id -> data URL (shared by timers, kept in IndexedDB)
+
+/** Writes text only when it changed (cheap to call every frame). */
+function setText(el, value) {
+  if (el._text !== value) { el._text = value; el.textContent = value; }
+}
+
+/** 75 -> "01:15", 3725 -> "01:02:05" (clock face). */
+function formatClock(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return h > 0 ? `${pad2(h)}:${pad2(m)}:${pad2(s)}` : `${pad2(m)}:${pad2(s)}`;
+}
+
+/** 75 -> "1:15", 3725 -> "1:02:05" (editable fields). */
+function formatDuration(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return h > 0 ? `${h}:${pad2(m)}:${pad2(s)}` : `${m}:${pad2(s)}`;
+}
+
+/** Parses "90", "5:30", "1:05:00", "45s", "2m 30s", "1h". Returns seconds or null. */
+function parseTimeInput(raw) {
+  const text = String(raw).trim().toLowerCase();
+  if (!text) return null;
+  let m;
+  let seconds = null;
+  if (/^\d+(\.\d+)?$/.test(text)) seconds = Math.round(parseFloat(text) * 60);          // plain minutes
+  else if ((m = text.match(/^(\d+):(\d{1,2})$/))) seconds = +m[1] * 60 + +m[2];         // mm:ss
+  else if ((m = text.match(/^(\d+):(\d{1,2}):(\d{1,2})$/))) seconds = +m[1] * 3600 + +m[2] * 60 + +m[3];
+  else if ((m = text.match(/^(?:(\d+)\s*h)?\s*(?:(\d+)\s*m(?:in)?)?\s*(?:(\d+)\s*s(?:ec)?)?$/)) && (m[1] || m[2] || m[3])) {
+    seconds = (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0);
+  }
+  return seconds === null ? null : clamp(seconds, 0, MAX_SECONDS);
+}
+
+let toastTimer = 0;
+function showToast(message) {
+  const el = $('#toast');
+  el.textContent = message;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+/* ---------- 2. SETTINGS + LOCAL STORAGE -------------------------------- */
+function createDefaultTimers() {
+  return [{
+    label: 'Main talk', mode: 'down', overtime: true, autoAdvance: true, bg: '', bgDim: 50,
+    segments: [
+      { name: 'Intro',   duration: 120, warn: 30,  red: 10 },
+      { name: 'Keynote', duration: 900, warn: 120, red: 30 },
+      { name: 'Q&A',     duration: 300, warn: 60,  red: 30 }
+    ]
+  }];
+}
+
+function createDefaultSettings() {
+  return {
+    theme: 'dark',            // dark | light | contrast | auto
+    sound: true, volume: 0.6, showMs: false, showLabels: true, messageSeconds: 15, recentMessages: [],
+    defaultWarn: 120, defaultRed: 30,
+    timers: createDefaultTimers(),
+    presets: []
+  };
+}
+
+function sanitizeSegments(list) {
+  const cleaned = (Array.isArray(list) ? list : []).slice(0, MAX_SEGMENTS).map((s, i) => ({
+    name: String((s && s.name) ?? `Segment ${i + 1}`).slice(0, 40),
+    duration: clamp(Math.round(Number(s && s.duration) || 0), 0, MAX_SECONDS),
+    warn: clamp(Math.round(Number(s && s.warn) || 0), 0, MAX_SECONDS),
+    red: clamp(Math.round(Number(s && s.red) || 0), 0, MAX_SECONDS)
+  }));
+  return cleaned.length ? cleaned : [{ name: 'Segment 1', duration: 300, warn: 120, red: 30 }];
+}
+
+function sanitizeTimers(list) {
+  const cleaned = (Array.isArray(list) ? list : []).slice(0, MAX_TIMERS).map((t, i) => ({
+    label: String((t && t.label) ?? `Timer ${i + 1}`).slice(0, 40),
+    mode: t && t.mode === 'up' ? 'up' : 'down',
+    overtime: !t || t.overtime !== false,
+    autoAdvance: !t || t.autoAdvance !== false,
+    bg: t && typeof t.bg === 'string' ? t.bg.slice(0, 40) : '',
+    bgDim: t && t.bgDim !== undefined && Number.isFinite(Number(t.bgDim)) ? clamp(Math.round(Number(t.bgDim)), 0, 85) : 50,
+    segments: sanitizeSegments(t && t.segments)
+  }));
+  return cleaned.length ? cleaned : createDefaultTimers();
+}
+
+function sanitizeSettings(raw) {
+  const base = createDefaultSettings();
+  if (!raw || typeof raw !== 'object') return base;
+  // Older saves had a single timer stored at the top level: migrate it.
+  const timers = raw.timers ? sanitizeTimers(raw.timers)
+    : raw.segments ? sanitizeTimers([{ label: 'Main talk', mode: raw.mode, overtime: raw.overtime, autoAdvance: raw.autoAdvance, segments: raw.segments }])
+    : base.timers;
+  return {
+    theme: ['dark', 'light', 'contrast', 'auto'].includes(raw.theme) ? raw.theme : base.theme,
+    sound: raw.sound !== false,
+    volume: clamp(Number(raw.volume ?? base.volume), 0, 1),
+    showMs: raw.showMs === true,
+    showLabels: raw.showLabels !== false,
+    messageSeconds: [0, 10, 15, 30, 60].includes(Number(raw.messageSeconds)) ? Number(raw.messageSeconds) : base.messageSeconds,
+    recentMessages: (Array.isArray(raw.recentMessages) ? raw.recentMessages : []).filter((m) => typeof m === 'string' && m.trim()).slice(0, 6).map((m) => m.slice(0, 120)),
+    defaultWarn: clamp(Math.round(Number(raw.defaultWarn ?? base.defaultWarn)), 0, MAX_SECONDS),
+    defaultRed: clamp(Math.round(Number(raw.defaultRed ?? base.defaultRed)), 0, MAX_SECONDS),
+    timers,
+    presets: (Array.isArray(raw.presets) ? raw.presets : []).slice(0, 50).map((p) => ({
+      name: String((p && p.name) || 'Preset').slice(0, 40),
+      timers: p && p.timers ? sanitizeTimers(p.timers) : sanitizeTimers([{ label: p && p.name, ...p }])
+    }))
+  };
+}
+
+function loadSettings() {
+  try {
+    return sanitizeSettings(JSON.parse(localStorage.getItem(STORAGE_KEY)));
+  } catch (error) {
+    return createDefaultSettings();   // storage blocked or corrupt JSON
+  }
+}
+
+let saveTimer = 0;
+function saveSettings() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch (error) { /* quota / private mode */ }
+  }, 150);
+}
+
+/* Timer objects in settings.timers are plain, serialisable config.
+   Everything live (engine state, DOM refs) hangs off a WeakMap, never off the config. */
+const settings = loadSettings();
+const timers = () => settings.timers;
+const runtimes = new WeakMap();
+function rt(timer) {
+  let r = runtimes.get(timer);
+  if (!r) {
+    r = {
+      engine: {
+        status: 'idle',     // idle | running | paused | finished
+        index: 0,           // current segment
+        startedAt: 0,       // timestamp of the latest start/resume
+        accumulated: 0,     // ms elapsed before the latest start/resume
+        adjustMs: 0,        // +/- minute adjustments for the current segment
+        fired: { warn: false, red: false, end: false }   // chimes already played
+      },
+      ui: null, lastState: 'idle'
+    };
+    runtimes.set(timer, r);
+  }
+  return r;
+}
+
+/* ---------- 3. TIMER ENGINE ---------------------------------------------
+   Time is derived from wall-clock timestamps, never from counting ticks:
+     elapsed = accumulated + (Date.now() - startedAt)
+   so throttled or suspended background tabs cannot cause drift.            */
+const eng = (t) => rt(t).engine;
+const currentSegment = (t) => t.segments[eng(t).index];
+/** A countdown always has a target; a count-up only has one if its length is > 0. */
+const hasTarget = (t) => t.mode === 'down' || currentSegment(t).duration > 0;
+const getDurationMs = (t) => (hasTarget(t) ? Math.max(1000, currentSegment(t).duration * 1000 + eng(t).adjustMs) : 0);
+const getElapsedMs = (t, now = Date.now()) => {
+  const e = eng(t);
+  return e.status === 'running' ? e.accumulated + Math.max(0, now - e.startedAt) : e.accumulated;
+};
+const getRemainingMs = (t, now = Date.now()) => (hasTarget(t) ? getDurationMs(t) - getElapsedMs(t, now) : Infinity);
+const isLive = (t) => eng(t).status === 'running' || eng(t).status === 'paused';
+const anyRunning = () => timers().some((t) => eng(t).status === 'running');
+const anyLive = () => timers().some(isLive);
+
+let selectedTimer = timers()[0];   // target of N/P/R and +/-1 min shortcuts
+const getSelected = () => (timers().includes(selectedTimer) ? selectedTimer : (selectedTimer = timers()[0]));
+const timerName = (t) => t.label || `Timer ${timers().indexOf(t) + 1}`;
+
+/** Marks thresholds already behind us as "fired" so starting a short segment is silent. */
+function initSegmentFlags(t) {
+  const seg = currentSegment(t);
+  const e = eng(t);
+  const target = hasTarget(t);
+  const full = getDurationMs(t);
+  e.fired.warn = !target || seg.warn <= 0 || full <= seg.warn * 1000;
+  e.fired.red = !target || seg.red <= 0 || full <= seg.red * 1000;
+  e.fired.end = !target;
+}
+
+function startTimer(t) {
+  ensureAudio();                               // must happen inside a user gesture
+  const e = eng(t);
+  if (e.status === 'finished') restartSequence(t);
+  if (e.status === 'running') return;
+  if (e.status === 'idle') { e.accumulated = 0; initSegmentFlags(t); }
+  e.startedAt = Date.now();
+  e.status = 'running';
+  refresh();
+}
+
+function pauseTimer(t) {
+  const e = eng(t);
+  if (e.status !== 'running') return;
+  e.accumulated = getElapsedMs(t);
+  e.status = 'paused';
+  refresh();
+}
+
+function resumeTimer(t) {
+  const e = eng(t);
+  if (e.status !== 'paused') return;
+  e.startedAt = Date.now();
+  e.status = 'running';
+  refresh();
+}
+
+function toggleTimer(t) {
+  const status = eng(t).status;
+  if (status === 'running') pauseTimer(t);
+  else if (status === 'paused') resumeTimer(t);
+  else startTimer(t);
+}
+
+/** Pause everything if anything is running, otherwise start/resume everything. */
+function toggleAll() {
+  if (anyRunning()) timers().forEach(pauseTimer);
+  else timers().forEach((t) => (eng(t).status === 'paused' ? resumeTimer(t) : startTimer(t)));
+}
+
+/** Reset the timer's current segment to its full time. */
+function resetTimer(t) {
+  const e = eng(t);
+  e.status = 'idle';
+  e.accumulated = 0;
+  e.adjustMs = 0;
+  initSegmentFlags(t);
+  updateActiveRow(t);
+  refresh();
+}
+
+/** Back to segment one. */
+function restartSequence(t) {
+  eng(t).index = 0;
+  resetTimer(t);
+}
+
+/** Jump to a segment. A running timer keeps running, anything else goes back to ready. */
+function goToSegment(t, index) {
+  const e = eng(t);
+  const wasRunning = e.status === 'running';
+  e.index = clamp(index, 0, t.segments.length - 1);
+  e.accumulated = 0;
+  e.adjustMs = 0;
+  e.startedAt = Date.now();
+  e.status = wasRunning ? 'running' : 'idle';
+  initSegmentFlags(t);
+  updateActiveRow(t);
+  refresh();
+}
+
+/** Add or remove time from the timer's current segment (deltaSeconds can be negative). */
+function adjustTime(t, deltaSeconds) {
+  if (!hasTarget(t)) { showToast('This segment has no target time to adjust'); return; }
+  const e = eng(t);
+  const seg = currentSegment(t);
+  const wasFinished = e.status === 'finished';
+  e.adjustMs += deltaSeconds * 1000;
+  e.adjustMs = Math.max(e.adjustMs, 1000 - seg.duration * 1000);      // keep >= 1 s total
+  if (wasFinished) { e.status = 'running'; e.startedAt = Date.now(); }
+  if (e.status !== 'running') handleThresholds(t, getRemainingMs(t)); // silently re-arm chimes
+  const sign = deltaSeconds > 0 ? '+' : '−';
+  showToast(`${timers().length > 1 ? timerName(t) + ': ' : ''}${sign}${formatDuration(Math.abs(deltaSeconds))}`);
+  refresh();
+}
+
+/* ---------- 4. THRESHOLDS + TICK --------------------------------------- */
+/**
+ * Compares the remaining time with the yellow / red / end marks.
+ * Returns the most severe mark newly crossed (0 none, 1 yellow, 2 red, 3 end).
+ * Marks re-arm when time is added and the remaining time rises above them again.
+ */
+function handleThresholds(t, remainingMs) {
+  if (!hasTarget(t)) return 0;
+  const seg = currentSegment(t);
+  const fired = eng(t).fired;
+  const marks = [['warn', seg.warn * 1000, 1], ['red', seg.red * 1000, 2], ['end', 0, 3]];
+  let severity = 0;
+  for (const [key, limit, level] of marks) {
+    if (key !== 'end' && limit <= 0) { fired[key] = true; continue; }   // disabled
+    if (remainingMs <= limit) {
+      if (!fired[key]) { fired[key] = true; severity = Math.max(severity, level); }
+    } else {
+      fired[key] = false;
+    }
+  }
+  return severity;
+}
+
+/** Advances one timer to "now": chimes, chains into following segments, finishes. Returns severity. */
+function tickTimer(t, now) {
+  const e = eng(t);
+  if (e.status !== 'running') return 0;
+  let severity = 0;
+  let segmentChanged = false;
+  for (let guard = 0; guard < 200; guard++) {
+    const remaining = getRemainingMs(t, now);
+    severity = Math.max(severity, handleThresholds(t, remaining));
+    if (remaining > 0) break;
+
+    const isLast = e.index >= t.segments.length - 1;
+    if (t.autoAdvance && !isLast) {
+      // Next segment starts exactly when this one ended, so no time is lost or gained.
+      const endMoment = e.startedAt + (getDurationMs(t) - e.accumulated);
+      e.index += 1;
+      e.accumulated = 0;
+      e.adjustMs = 0;
+      e.startedAt = endMoment;
+      initSegmentFlags(t);
+      segmentChanged = true;
+      continue;
+    }
+    if (!t.overtime) { e.accumulated = getDurationMs(t); e.status = 'finished'; }
+    break;
+  }
+  if (segmentChanged) updateActiveRow(t);
+  return severity;
+}
+
+/** Ticks every timer; one chime (the most severe) is played per tick, however many timers crossed. */
+function tick() {
+  const now = Date.now();
+  let severity = 0;
+  for (const t of timers()) severity = Math.max(severity, tickTimer(t, now));
+  if (severity) playChime(severity);
+}
+
+/* ---------- 5. AUDIO CHIMES (Web Audio API, no assets) ----------------- */
+let audioContext = null;
+
+function ensureAudio() {
+  try {
+    if (!audioContext) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) audioContext = new Ctx();
+    }
+    if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+  } catch (error) { /* audio unavailable */ }
+}
+
+/** One soft sine beep with a short fade in/out so it never clicks. */
+function playTone(frequency, startOffset, duration, volume) {
+  const ctx = audioContext;
+  const start = ctx.currentTime + startOffset;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = frequency;
+  gain.gain.setValueAtTime(0, start);
+  gain.gain.linearRampToValueAtTime(volume, start + 0.03);
+  gain.gain.setValueAtTime(volume, start + Math.max(0.03, duration - 0.08));
+  gain.gain.linearRampToValueAtTime(0, start + duration);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(start);
+  osc.stop(start + duration + 0.05);
+}
+
+/** level 1 = yellow (one beep), 2 = red (two beeps), 3 = end (rising triad). */
+function playChime(level, force = false) {
+  if (!settings.sound && !force) return;
+  ensureAudio();
+  if (!audioContext) return;
+  const v = 0.35 * settings.volume;
+  if (v <= 0) return;
+  if (level === 1) playTone(660, 0, 0.25, v);
+  else if (level === 2) { playTone(880, 0, 0.16, v); playTone(880, 0.26, 0.16, v); }
+  else { playTone(523.25, 0, 0.2, v); playTone(659.25, 0.26, 0.2, v); playTone(783.99, 0.52, 0.6, v); }
+}
+
+/* Keep the screen awake while any timer runs (where supported). */
+let wakeLock = null;
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator && !wakeLock && !document.hidden) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    }
+  } catch (error) { wakeLock = null; }
+}
+function releaseWakeLock() {
+  try { if (wakeLock) wakeLock.release(); } catch (error) { /* ignore */ }
+  wakeLock = null;
+}
+let wasRunning = false;
+function syncWakeLock() {
+  const running = anyRunning();
+  if (running !== wasRunning) { wasRunning = running; if (running) requestWakeLock(); else releaseWakeLock(); }
+}
+
+/* ---------- 6. DISPLAY / RENDERING ------------------------------------- */
+const stageEl = $('#stage');
+const bannerEl = $('#banner');
+const msgStatusEl = $('#msgStatus');
+const STATUS_TEXT = { idle: 'Ready', paused: 'Paused', finished: "Time's up" };
+const SR_MESSAGES = { yellow: 'warning, time is running low', red: 'final wrap-up', overtime: 'time is up, now in overtime', finished: 'time is up' };
+
+/** Builds a plain, serialisable snapshot of one timer for the stage and cards. */
+function computeView(t, index) {
+  const now = Date.now();
+  const e = eng(t);
+  const seg = currentSegment(t);
+  const total = t.segments.length;
+  const target = hasTarget(t);
+  const elapsed = getElapsedMs(t, now);
+  const duration = getDurationMs(t);
+  const remaining = target ? duration - elapsed : Infinity;
+  const live = isLive(t);
+
+  // Traffic-light state
+  let state = 'idle';
+  if (e.status === 'finished') state = 'finished';
+  else if (live) {
+    if (!target) state = 'green';
+    else if (remaining <= 0) state = 'overtime';
+    else if (seg.red > 0 && remaining <= seg.red * 1000) state = 'red';
+    else if (seg.warn > 0 && remaining <= seg.warn * 1000) state = 'yellow';
+    else state = 'green';
+  }
+
+  // Clock text
+  let seconds;
+  let fraction;
+  let prefix = '';
+  if (t.mode === 'down') {
+    if (remaining > 0) {
+      seconds = settings.showMs ? Math.floor(remaining / 1000) : Math.ceil(remaining / 1000);
+      fraction = remaining % 1000;
+    } else {
+      const over = -remaining;
+      seconds = Math.floor(over / 1000);
+      fraction = over % 1000;
+      if (state === 'overtime') prefix = '+';
+    }
+  } else {
+    seconds = Math.floor(elapsed / 1000);
+    fraction = elapsed % 1000;
+  }
+  const text = prefix + formatClock(seconds);
+
+  // Status line
+  let statusText = STATUS_TEXT[e.status] || '';
+  if (e.status === 'running') {
+    statusText = { overtime: 'Over time', red: 'Final wrap-up', yellow: 'Wrap up soon' }[state]
+      || (t.mode === 'down' ? 'Counting down' : 'Counting up');
+  }
+  const segName = seg.name || `Segment ${e.index + 1}`;
+
+  return {
+    index,
+    text,
+    ms: settings.showMs ? '.' + pad3(Math.floor(fraction)) : '',
+    chars: text.length + (settings.showMs ? 1.6 : 0),
+    state,
+    status: e.status,
+    statusText: total > 1 ? `${segName} · ${statusText}` : statusText,
+    label: timerName(t),
+    bg: t.bg || '',
+    bgDim: t.bgDim ?? 50,
+    counter: total > 1 ? `${e.index + 1} / ${total}` : '',
+    next: e.index < total - 1
+      ? `Next: ${t.segments[e.index + 1].name || 'Segment ' + (e.index + 2)} · ${formatDuration(t.segments[e.index + 1].duration)}`
+      : (total > 1 ? 'Final segment' : ''),
+    progress: target ? clamp(elapsed / duration, 0, 1) : 0,
+    canAdjust: target,
+    canNext: e.index < total - 1
+  };
+}
+
+/* ----- Stage tiles ----- */
+const tiles = [];     // { el, label, counter, digits, ms, status, next, progress }
+
+function createTile() {
+  const el = document.createElement('div');
+  el.className = 'tile';
+  el.draggable = !IS_STAGE_WINDOW;
+  el.innerHTML = `<div class="tile-bg" data-r="bg" aria-hidden="true"></div><div class="stage-inner">
+    <div class="stage-top"><span class="stage-label" data-r="label"></span><span class="stage-counter" data-r="counter"></span></div>
+    <div class="stage-time"><span data-r="digits">00:00</span><span class="ms" data-r="ms"></span></div>
+    <div class="stage-bottom">
+      <div class="progress" aria-hidden="true"><div class="progress-fill" data-r="progress"></div></div>
+      <div class="stage-info"><span class="stage-status" data-r="status"></span><span data-r="next"></span></div>
+    </div></div>`;
+  const ref = (name) => $(`[data-r="${name}"]`, el);
+  return { el, bgEl: ref('bg'), label: ref('label'), counter: ref('counter'), digits: ref('digits'), ms: ref('ms'),
+           status: ref('status'), next: ref('next'), progress: ref('progress') };
+}
+
+/** Picks the column count whose tiles are closest to a comfortable clock shape. */
+function layoutStage() {
+  const n = tiles.length;
+  if (!n) return;
+  const w = stageEl.clientWidth || 16;
+  const h = stageEl.clientHeight || 9;
+  let bestCols = 1;
+  let bestScore = Infinity;
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    const score = Math.abs(Math.log(((w / cols) / (h / rows)) / 1.7));
+    if (score < bestScore - 1e-9) { bestScore = score; bestCols = cols; }
+  }
+  const rows = Math.ceil(n / bestCols);
+  stageEl.style.setProperty('--cols', bestCols);
+  stageEl.style.setProperty('--rows', rows);
+  stageEl.style.setProperty('--gap', n > 1 ? 'max(0.9vmin, 6px)' : '0px');
+  stageEl.style.setProperty('--tile-r', n > 1 ? '14px' : '0px');
+  // A lone tile on the last row stretches across the row
+  tiles.forEach((tile, i) => { tile.el.style.gridColumn = i === n - 1 ? `span ${bestCols - ((n - 1) % bestCols)}` : ''; });
+}
+
+/** Draws the list of timer views onto the stage. Also used by the separate stage window. */
+function renderStage(views, showLabels, message = '') {
+  const labels = showLabels ? 'on' : 'off';
+  if (stageEl.dataset.labels !== labels) stageEl.dataset.labels = labels;
+  if (message) setText(bannerEl, message);        // keep the words while the banner slides away
+  const messageOn = message ? 'on' : 'off';
+  if (stageEl.dataset.message !== messageOn) stageEl.dataset.message = messageOn;
+  let layoutNeeded = false;
+  while (tiles.length < views.length) { const tile = createTile(); tiles.push(tile); stageEl.appendChild(tile.el); layoutNeeded = true; }
+  while (tiles.length > views.length) { tiles.pop().el.remove(); layoutNeeded = true; }
+  views.forEach((v, i) => {
+    const tile = tiles[i];
+    tile.el.dataset.index = i;
+    const bgUrl = v.bg ? imageCache.get(v.bg) : null;
+    const bgKey = bgUrl ? v.bg : '';
+    if (tile._bg !== bgKey) {
+      tile._bg = bgKey;
+      tile.bgEl.style.backgroundImage = bgUrl ? `url("${bgUrl}")` : '';
+      tile.el.dataset.bg = bgUrl ? 'on' : 'off';
+    }
+    if (tile._dim !== v.bgDim) { tile._dim = v.bgDim; tile.el.style.setProperty('--dim', v.bgDim / 100); }
+    if (tile.el.dataset.state !== v.state) tile.el.dataset.state = v.state;
+    if (tile.el.dataset.status !== v.status) tile.el.dataset.status = v.status;
+    setText(tile.label, v.label);
+    setText(tile.counter, v.counter);
+    setText(tile.digits, v.text);
+    setText(tile.ms, v.ms);
+    setText(tile.status, v.statusText);
+    setText(tile.next, v.next);
+    if (tile._chars !== v.chars) { tile._chars = v.chars; tile.el.style.setProperty('--chars', v.chars); }
+    const scale = v.progress.toFixed(4);
+    if (tile._scale !== scale) { tile._scale = scale; tile.progress.style.transform = `scaleX(${scale})`; }
+  });
+  if (layoutNeeded) layoutStage();
+}
+
+let lastBroadcastKey = '';
+
+/** Recomputes every timer's view and pushes it to the stage, cards, tab title and any stage window. */
+function updateDisplay() {
+  const list = timers();
+  const views = list.map(computeView);
+  renderStage(views, settings.showLabels, messageState.text);
+
+  list.forEach((t, i) => {
+    const v = views[i];
+    const r = rt(t);
+    const ui = r.ui;
+    if (ui) {
+      setText(ui.toggle, { idle: 'Start', running: 'Pause', paused: 'Resume', finished: 'Restart' }[v.status]);
+      setText(ui.readout, v.text + v.ms);
+      if (ui.card.dataset.state !== v.state) ui.card.dataset.state = v.state;
+      if (ui.canAdjust !== v.canAdjust) { ui.canAdjust = v.canAdjust; ui.needsTarget.forEach((b) => { b.disabled = !v.canAdjust; }); }
+      if (ui.canNext !== v.canNext) { ui.canNext = v.canNext; ui.needsNext.forEach((b) => { b.disabled = !v.canNext; }); }
+    }
+    // Screen-reader announcements on state changes only
+    if (v.state !== r.lastState) {
+      r.lastState = v.state;
+      if (SR_MESSAGES[v.state]) $('#srLive').textContent = `${v.label}: ${SR_MESSAGES[v.state]}`;
+    }
+  });
+
+  const allLabel = anyRunning() ? 'Pause all' : (list.some((t) => eng(t).status === 'paused') ? 'Resume all' : 'Start all');
+  $$('[data-toggle-all-label]').forEach((el) => setText(el, allLabel));
+
+  // Tab title, handy when the page is in the background
+  const live = views.filter((v) => v.status !== 'idle');
+  const title = live.length ? live.map((v) => v.text).join(' | ') : 'Speaker Timer';
+  if (document.title !== title) document.title = title;
+
+  syncWakeLock();
+  persistRun();
+  setText(msgStatusEl, messageState.text ? `Showing: ${messageState.text}` : '');
+  broadcastView(views);
+}
+
+/* Render loop: requestAnimationFrame while visible, a timer as a safety net always.
+   Because time comes from timestamps, hidden tabs simply resync on the next call. */
+let frameId = 0;
+function frameLoop() {
+  frameId = 0;
+  tick();
+  updateDisplay();
+  ensureFrameLoop();
+}
+function ensureFrameLoop() {
+  if (!frameId && anyRunning() && !document.hidden) frameId = requestAnimationFrame(frameLoop);
+}
+function refresh() {
+  tick();
+  updateDisplay();
+  ensureFrameLoop();
+}
+
+/* ----- Messages to the speaker: a banner the operator can raise on the stage ----- */
+const QUICK_MESSAGES = ['Wrap up', 'Q&A next', 'Speak up', 'Slow down', 'Time check', 'Thank you'];
+const messageState = { text: '', until: 0 };   // until = 0 means "stay until cleared"
+
+function sendMessage(raw) {
+  const text = String(raw || '').trim().slice(0, 120);
+  if (!text) { showToast('Type a message first'); return; }
+  messageState.text = text;
+  messageState.until = settings.messageSeconds ? Date.now() + settings.messageSeconds * 1000 : 0;
+  if (!QUICK_MESSAGES.includes(text)) {
+    settings.recentMessages = [text, ...settings.recentMessages.filter((m) => m !== text)].slice(0, 6);
+    saveSettings();
+    renderMessageChips();
+  }
+  playChime(1);                                  // soft cue, respects the mute setting
+  $('#srLive').textContent = `Message to speaker: ${text}`;
+  updateDisplay();
+}
+
+function sendMessageFromInput() {
+  const input = $('#msgText');
+  sendMessage(input.value);
+  if (messageState.text) input.value = '';
+}
+
+function clearMessage() {
+  if (!messageState.text) return;
+  messageState.text = '';
+  messageState.until = 0;
+  updateDisplay();
+}
+
+function messageTick() {
+  if (messageState.text && messageState.until && Date.now() >= messageState.until) clearMessage();
+}
+
+function renderMessageChips() {
+  const chip = (m) => `<button class="btn small chip" data-msg="${escapeHtml(m)}">${escapeHtml(m)}</button>`;
+  $('#messageChips').innerHTML = [...QUICK_MESSAGES, ...settings.recentMessages].map(chip).join('');
+}
+
+/* ----- Recover after refresh -----
+   Timers are defined by absolute timestamps, so a running timer is fully described by
+   (status, index, startedAt, accumulated, adjustMs). We save that on every change plus a
+   5 s heartbeat, and restore it on load. If the page was closed for more than 10 minutes,
+   running timers come back paused at the moment we last saw them. */
+const RUN_KEY = 'speakerTimer.run.v1';
+const RUN_STALE_MS = 10 * 60 * 1000;
+let lastRunSignature = '';
+
+function persistRun(force = false) {
+  const snapshot = timers().map((t) => {
+    const e = eng(t);
+    return { segs: t.segments.length, index: e.index, status: e.status, startedAt: e.startedAt,
+             accumulated: e.accumulated, adjustMs: e.adjustMs, fired: { ...e.fired } };
+  });
+  const signature = JSON.stringify(snapshot);
+  if (!force && signature === lastRunSignature) return;
+  lastRunSignature = signature;
+  try {
+    localStorage.setItem(RUN_KEY, JSON.stringify({ lastSeen: Date.now(), selected: timers().indexOf(getSelected()), timers: snapshot }));
+  } catch (error) { /* storage unavailable */ }
+}
+
+/** Returns true if anything was restored. Call before the first refresh. */
+function restoreRunState() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(RUN_KEY)); } catch (error) { return false; }
+  if (!saved || !Array.isArray(saved.timers) || saved.timers.length !== timers().length) return false;
+  const now = Date.now();
+  const lastSeen = Number(saved.lastSeen) || 0;
+  const stale = now - lastSeen > RUN_STALE_MS;
+  let restored = false;
+  let pausedBecauseStale = false;
+  timers().forEach((t, i) => {
+    const s = saved.timers[i];
+    if (!s || s.segs !== t.segments.length || !['idle', 'running', 'paused', 'finished'].includes(s.status)) return;
+    const e = eng(t);
+    e.index = clamp(Math.round(Number(s.index) || 0), 0, t.segments.length - 1);
+    e.adjustMs = Number(s.adjustMs) || 0;
+    e.accumulated = Math.max(0, Number(s.accumulated) || 0);
+    e.startedAt = Number(s.startedAt) || 0;
+    e.status = s.status;
+    if (e.status === 'running' && stale) {
+      e.accumulated += Math.max(0, lastSeen - e.startedAt);   // freeze where we last saw it
+      e.status = 'paused';
+      pausedBecauseStale = true;
+    }
+    if (e.status === 'idle') initSegmentFlags(t);
+    else if (s.fired) { e.fired.warn = !!s.fired.warn; e.fired.red = !!s.fired.red; e.fired.end = !!s.fired.end; }
+    if (e.status !== 'idle' || e.index > 0) restored = true;
+  });
+  if (!restored) return false;
+  const sel = timers()[Number(saved.selected)];
+  if (sel) selectedTimer = sel;
+  // Catch up silently: advance chained segments without replaying chimes for marks passed while away
+  const catchUp = Date.now();
+  timers().forEach((t) => tickTimer(t, catchUp));
+  showToast(pausedBecauseStale ? 'Timers restored and paused (page was closed for a while)'
+    : anyRunning() ? 'Timers restored after refresh' : 'Timer positions restored');
+  return true;
+}
+
+/* ----- Background images -----
+   Pictures are downscaled to <= 1920 px JPEGs, kept in IndexedDB (localStorage is too small)
+   and shared with the stage window over the same channel as the clocks. */
+const imageDb = {
+  db: null,
+  open() {
+    return new Promise((resolve) => {
+      try {
+        const request = indexedDB.open('speakerTimer', 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('images');
+        request.onsuccess = () => { this.db = request.result; resolve(true); };
+        request.onerror = () => resolve(false);
+      } catch (error) { resolve(false); }
+    });
+  },
+  run(mode, action) {
+    return new Promise((resolve) => {
+      if (!this.db) { resolve(false); return; }
+      try {
+        const tx = this.db.transaction('images', mode);
+        action(tx.objectStore('images'));
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = tx.onabort = () => resolve(false);
+      } catch (error) { resolve(false); }
+    });
+  },
+  put(id, url) { return this.run('readwrite', (store) => store.put(url, id)); },
+  remove(id) { return this.run('readwrite', (store) => store.delete(id)); },
+  all() {
+    return new Promise((resolve) => {
+      const found = {};
+      if (!this.db) { resolve(found); return; }
+      try {
+        const request = this.db.transaction('images', 'readonly').objectStore('images').openCursor();
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (cursor) { found[cursor.key] = cursor.value; cursor.continue(); } else resolve(found);
+        };
+        request.onerror = () => resolve(found);
+      } catch (error) { resolve(found); }
+    });
+  }
+};
+
+/** Reads a File, scales it down and returns a JPEG data URL. */
+function downscaleImage(file) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const sourceW = img.naturalWidth || 1920;
+        const sourceH = img.naturalHeight || 1080;
+        const scale = Math.min(1, 1920 / Math.max(sourceW, sourceH));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(sourceW * scale));
+        canvas.height = Math.max(1, Math.round(sourceH * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);   // transparent PNGs sit on black
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      } catch (error) { reject(error); } finally { URL.revokeObjectURL(objectUrl); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('decode failed')); };
+    img.src = objectUrl;
+  });
+}
+
+/** Deletes stored images that no timer or preset refers to any more. */
+function gcImages() {
+  const used = new Set();
+  const collect = (list) => list.forEach((t) => { if (t.bg) used.add(t.bg); });
+  collect(settings.timers);
+  settings.presets.forEach((p) => collect(p.timers));
+  for (const id of Array.from(imageCache.keys())) {
+    if (!used.has(id)) { imageCache.delete(id); imageDb.remove(id); }
+  }
+}
+
+/** Sends image data to the stage window (all cached images when ids is omitted). */
+function sendImages(ids) {
+  if (!channel || IS_STAGE_WINDOW) return;
+  const images = {};
+  (ids || Array.from(imageCache.keys())).forEach((id) => { if (imageCache.has(id)) images[id] = imageCache.get(id); });
+  if (Object.keys(images).length) { try { channel.postMessage({ type: 'images', images }); } catch (error) { /* ignore */ } }
+}
+
+async function setTimerBackground(t, file) {
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { showToast('That file is not an image'); return; }
+  if (file.size > 25 * 1024 * 1024) { showToast('Image is too large (25 MB max)'); return; }
+  try {
+    const url = await downscaleImage(file);
+    const id = `img_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+    imageCache.set(id, url);
+    t.bg = id;
+    gcImages();                                   // drops the image this one replaced, if unused
+    const stored = await imageDb.put(id, url);
+    saveSettings();
+    updateBgUi(t);
+    sendImages([id]);
+    refresh();
+    showToast(stored ? 'Background set' : 'Background set, but this browser cannot store it for next time');
+  } catch (error) {
+    showToast('Could not read that image');
+  }
+}
+
+function removeTimerBackground(t) {
+  t.bg = '';
+  gcImages();
+  saveSettings();
+  updateBgUi(t);
+  refresh();
+}
+
+function applyBackgroundToAll(t) {
+  if (!t.bg) return;
+  timers().forEach((other) => { other.bg = t.bg; other.bgDim = t.bgDim ?? 50; });
+  saveSettings();
+  timers().forEach(updateBgUi);
+  refresh();
+  showToast('Background applied to every timer');
+}
+
+/** Refreshes the thumbnail, button states and slider in a timer's card. */
+function updateBgUi(t) {
+  const ui = rt(t).ui;
+  if (!ui) return;
+  const url = t.bg ? imageCache.get(t.bg) : '';
+  if (url) { if (ui.bgThumb.src !== url) ui.bgThumb.src = url; ui.bgThumb.hidden = false; }
+  else { ui.bgThumb.removeAttribute('src'); ui.bgThumb.hidden = true; }
+  ui.bgButtons.forEach((b) => { b.disabled = !url; });
+  ui.bgDimInput.value = t.bgDim ?? 50;
+}
+
+async function loadStoredImages() {
+  if (!(await imageDb.open())) return;
+  const stored = await imageDb.all();
+  Object.entries(stored).forEach(([id, url]) => imageCache.set(id, url));
+  gcImages();
+  timers().forEach(updateBgUi);
+  refresh();
+}
+
+/* ---------- 7. TIMER CARDS + SEGMENT EDITOR ---------------------------- */
+const timerListEl = $('#timerList');
+
+function timerCardHtml(t, i) {
+  return `<article class="card timer-card" data-index="${i}" data-state="idle" draggable="false">
+    <div class="timer-head">
+      <button class="btn small icon" data-taction="grip" title="Drag to reorder" aria-label="Drag to reorder timer ${i + 1}" style="cursor:grab">&#8942;&#8942;</button>
+      <span class="dot" aria-hidden="true"></span>
+      <input type="text" data-tfield="label" maxlength="40" autocomplete="off" placeholder="Timer ${i + 1}" aria-label="Timer ${i + 1} label" value="${escapeHtml(t.label)}">
+      <output class="readout" data-ref="readout">00:00</output>
+      <div class="seg-tools">
+        <button class="btn small icon" data-taction="moveUp" aria-label="Move timer ${i + 1} up" ${i === 0 ? 'disabled' : ''}>&uarr;</button>
+        <button class="btn small icon" data-taction="moveDown" aria-label="Move timer ${i + 1} down" ${i === timers().length - 1 ? 'disabled' : ''}>&darr;</button>
+        <button class="btn small icon danger" data-taction="removeTimer" aria-label="Remove timer ${i + 1}" ${timers().length === 1 ? 'disabled' : ''}>&times;</button>
+      </div>
+    </div>
+    <div class="controls" role="group" aria-label="Controls for timer ${i + 1}">
+      <button class="btn primary" style="min-width:120px" data-taction="toggle"><span data-ref="toggle">Start</span></button>
+      <button class="btn" data-taction="reset" title="Reset the current segment (R)">Reset</button>
+      <span class="btn-group">
+        <button class="btn" data-taction="sub" data-needs-target>&minus;1 min</button>
+        <button class="btn" data-taction="add" data-needs-target>+1 min</button>
+      </span>
+      <span class="btn-group">
+        <button class="btn" data-taction="prev" aria-label="Previous segment">&#9664;</button>
+        <button class="btn" data-taction="next" data-needs-next aria-label="Next segment">&#9654;</button>
+      </span>
+      <button class="btn" data-taction="restart" title="Back to this timer's first segment">Restart</button>
+    </div>
+    <div class="timer-opts">
+      <label class="chk"><span class="sr-only">Mode</span>
+        <select data-tfield="mode" aria-label="Timer ${i + 1} mode">
+          <option value="down" ${t.mode === 'down' ? 'selected' : ''}>Count down</option>
+          <option value="up" ${t.mode === 'up' ? 'selected' : ''}>Count up</option>
+        </select></label>
+      <label class="chk"><input type="checkbox" data-tfield="overtime" ${t.overtime ? 'checked' : ''}> Overtime past 00:00</label>
+      <label class="chk"><input type="checkbox" data-tfield="autoAdvance" ${t.autoAdvance ? 'checked' : ''}> Auto-advance segments</label>
+    </div>
+    <div class="bg-row">
+      <span class="lbl" style="margin:0">Background</span>
+      <img class="bg-thumb" data-ref="bgThumb" alt="Current background" hidden>
+      <label class="btn small">Upload image&hellip;<input type="file" class="sr-only" accept="image/*" data-tfield="bgFile" aria-label="Upload a background image for timer ${i + 1}"></label>
+      <button class="btn small" data-taction="bgRemove" data-needs-bg>Remove</button>
+      <button class="btn small" data-taction="bgAll" data-needs-bg title="Use this picture on every timer">Use on all</button>
+      <label class="chk" style="display:inline-flex;gap:8px;align-items:center;font-size:.85rem"><span class="lbl" style="margin:0">Dim</span>
+        <input type="range" min="0" max="85" step="5" value="${t.bgDim ?? 50}" data-tfield="bgDim" aria-label="Background dimming for timer ${i + 1}"></label>
+    </div>
+    <ol class="seg-list" data-ref="segList"></ol>
+    <div class="timer-foot">
+      <button class="btn" data-taction="addSegment">+ Add segment</button>
+      <span class="hint" data-ref="total"></span>
+    </div>
+    <p class="hint" style="margin-top:10px">Times: <code>90</code> = minutes, <code>5:30</code> = mm:ss, <code>1:05:00</code>, <code>45s</code>.
+      Yellow/red are time <em>remaining</em> (<code>0</code> = off). Click a segment number to jump to it.</p>
+  </article>`;
+}
+
+/** Rebuilds every timer card (call after the timer list changes shape). */
+function renderTimers() {
+  timerListEl.innerHTML = timers().map(timerCardHtml).join('');
+  timers().forEach((t, i) => {
+    const card = timerListEl.children[i];
+    const r = rt(t);
+    r.ui = {
+      card, toggle: $('[data-ref="toggle"]', card), readout: $('[data-ref="readout"]', card),
+      segList: $('[data-ref="segList"]', card), total: $('[data-ref="total"]', card),
+      needsTarget: $$('[data-needs-target]', card), needsNext: $$('[data-needs-next]', card),
+      bgThumb: $('[data-ref="bgThumb"]', card), bgButtons: $$('[data-needs-bg]', card), bgDimInput: $('[data-tfield="bgDim"]', card),
+      canAdjust: true, canNext: true
+    };
+    updateBgUi(t);
+    renderSegments(t);
+  });
+  updateSelected();
+}
+
+function renderSegments(t) {
+  const ui = rt(t).ui;
+  if (!ui) return;
+  ui.segList.innerHTML = t.segments.map((s, i) => `
+    <li class="seg" data-index="${i}">
+      <button class="seg-num" data-seg="go" title="Jump to this segment" aria-label="Jump to segment ${i + 1}">${i + 1}</button>
+      <label class="f-name"><span>Name</span><input type="text" data-field="name" maxlength="40" autocomplete="off" placeholder="Segment ${i + 1}" value="${escapeHtml(s.name)}"></label>
+      <label><span>Length</span><input type="text" inputmode="numeric" data-field="duration" autocomplete="off" value="${formatDuration(s.duration)}"></label>
+      <label><span>Yellow at</span><input type="text" inputmode="numeric" data-field="warn" autocomplete="off" value="${formatDuration(s.warn)}"></label>
+      <label><span>Red at</span><input type="text" inputmode="numeric" data-field="red" autocomplete="off" value="${formatDuration(s.red)}"></label>
+      <div class="seg-tools">
+        <button class="btn small icon" data-seg="up" aria-label="Move segment ${i + 1} up" ${i === 0 ? 'disabled' : ''}>&uarr;</button>
+        <button class="btn small icon" data-seg="down" aria-label="Move segment ${i + 1} down" ${i === t.segments.length - 1 ? 'disabled' : ''}>&darr;</button>
+        <button class="btn small icon danger" data-seg="remove" aria-label="Remove segment ${i + 1}" ${t.segments.length === 1 ? 'disabled' : ''}>&times;</button>
+      </div>
+    </li>`).join('');
+  updateActiveRow(t);
+  updateSegmentTotal(t);
+}
+
+function updateActiveRow(t) {
+  const ui = rt(t).ui;
+  if (!ui) return;
+  $$('.seg', ui.segList).forEach((row, i) => {
+    const active = i === eng(t).index;
+    row.classList.toggle('active', active);
+    if (active) row.setAttribute('aria-current', 'true'); else row.removeAttribute('aria-current');
+  });
+}
+
+function updateSegmentTotal(t) {
+  const ui = rt(t).ui;
+  if (!ui) return;
+  const total = t.segments.reduce((sum, s) => sum + s.duration, 0);
+  ui.total.textContent = `${t.segments.length} segment${t.segments.length === 1 ? '' : 's'} · total ${formatDuration(total)}`;
+}
+
+function updateSelected() {
+  const sel = getSelected();
+  timers().forEach((t) => { const ui = rt(t).ui; if (ui) ui.card.classList.toggle('selected', t === sel); });
+}
+function selectTimer(t) {
+  if (selectedTimer === t) return;
+  selectedTimer = t;
+  updateSelected();
+}
+
+/** Called after any change to a timer's segment data: save + keep its engine consistent. */
+function commitSegments(t) {
+  const e = eng(t);
+  e.index = clamp(e.index, 0, t.segments.length - 1);
+  saveSettings();
+  updateSegmentTotal(t);
+  if (e.status === 'idle') resetTimer(t);
+  else { if (e.status !== 'running') handleThresholds(t, getRemainingMs(t)); refresh(); }
+}
+
+function addSegment(t) {
+  if (t.segments.length >= MAX_SEGMENTS) { showToast(`Maximum of ${MAX_SEGMENTS} segments`); return; }
+  t.segments.push({ name: `Segment ${t.segments.length + 1}`, duration: 300, warn: settings.defaultWarn, red: settings.defaultRed });
+  renderSegments(t);
+  commitSegments(t);
+  const rows = $$('.seg', rt(t).ui.segList);
+  const input = $('[data-field="name"]', rows[rows.length - 1]);
+  input.focus(); input.select();
+}
+
+function moveSegment(t, index, direction) {
+  const target = index + direction;
+  if (target < 0 || target >= t.segments.length) return;
+  const active = currentSegment(t);
+  [t.segments[index], t.segments[target]] = [t.segments[target], t.segments[index]];
+  eng(t).index = t.segments.indexOf(active);
+  renderSegments(t);
+  commitSegments(t);
+}
+
+function removeSegment(t, index) {
+  if (t.segments.length <= 1) return;
+  const e = eng(t);
+  const removedCurrent = index === e.index;
+  t.segments.splice(index, 1);
+  if (index < e.index) e.index -= 1;
+  renderSegments(t);
+  saveSettings();
+  if (removedCurrent) goToSegment(t, Math.min(index, t.segments.length - 1));
+  else commitSegments(t);
+}
+
+function handleSegmentFieldChange(t, event) {
+  const input = event.target.closest('[data-field]');
+  if (!input) return;
+  const seg = t.segments[+input.closest('.seg').dataset.index];
+  const field = input.dataset.field;
+  if (field === 'name') {
+    seg.name = input.value.trim().slice(0, 40);
+  } else {
+    if (event.type === 'input') return;           // commit time fields on blur / Enter only
+    const seconds = parseTimeInput(input.value);
+    if (seconds === null) { showToast('Could not read that time, try 5:30 or 90'); input.value = formatDuration(seg[field]); return; }
+    seg[field] = (field === 'duration' && t.mode === 'down') ? Math.max(1, seconds) : seconds;
+    input.value = formatDuration(seg[field]);
+  }
+  commitSegments(t);
+}
+
+function handleTimerFieldChange(t, event) {
+  const input = event.target.closest('[data-tfield]');
+  if (!input) return;
+  const field = input.dataset.tfield;
+  if (field === 'label') {
+    t.label = input.value.slice(0, 40);
+    saveSettings(); refresh();
+  } else if (field === 'mode') {
+    t.mode = input.value === 'up' ? 'up' : 'down';
+    saveSettings();
+    if (eng(t).status === 'idle') resetTimer(t); else refresh();
+  } else if (field === 'overtime' || field === 'autoAdvance') {
+    t[field] = input.checked;
+    saveSettings(); refresh();
+  } else if (field === 'bgDim') {
+    t.bgDim = clamp(Number(input.value) || 0, 0, 85);
+    saveSettings(); refresh();
+  } else if (field === 'bgFile') {
+    setTimerBackground(t, input.files && input.files[0]);
+    input.value = '';
+  }
+}
+
+/* ----- Timer list structure: add / remove / reorder ----- */
+function addTimer() {
+  if (timers().length >= MAX_TIMERS) { showToast(`Maximum of ${MAX_TIMERS} timers`); return; }
+  const n = timers().length;
+  const t = { label: `Timer ${n + 1}`, mode: 'down', overtime: true, autoAdvance: true, bg: '', bgDim: 50,
+    segments: [{ name: 'Segment 1', duration: 300, warn: settings.defaultWarn, red: settings.defaultRed }] };
+  timers().push(t);
+  selectedTimer = t;
+  saveSettings();
+  renderTimers();
+  resetTimer(t);
+  const input = $('[data-tfield="label"]', rt(t).ui.card);
+  input.focus(); input.select();
+  input.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function removeTimer(t) {
+  if (timers().length <= 1) return;
+  if (isLive(t) && !confirm(`"${timerName(t)}" is running. Remove it anyway?`)) return;
+  settings.timers = timers().filter((x) => x !== t);
+  gcImages();
+  saveSettings();
+  renderTimers();
+  refresh();
+}
+
+/** Moves a timer to a new position in the list (used by buttons and drag and drop). */
+function moveTimerTo(t, newIndex) {
+  const list = timers();
+  const from = list.indexOf(t);
+  const to = clamp(newIndex, 0, list.length - 1);
+  if (from < 0 || from === to) return;
+  list.splice(from, 1);
+  list.splice(to, 0, t);
+  saveSettings();
+  renderTimers();
+  refresh();
+}
+
+function runTimerAction(t, action, event) {
+  switch (action) {
+    case 'toggle':       toggleTimer(t); break;
+    case 'reset':        resetTimer(t); break;
+    case 'restart':      restartSequence(t); break;
+    case 'add':          adjustTime(t, 60); break;
+    case 'sub':          adjustTime(t, -60); break;
+    case 'next':         if (eng(t).index < t.segments.length - 1) goToSegment(t, eng(t).index + 1); break;
+    case 'prev':         goToSegment(t, Math.max(0, eng(t).index - 1)); break;
+    case 'addSegment':   addSegment(t); break;
+    case 'moveUp':       moveTimerTo(t, timers().indexOf(t) - 1); focusMoved(t, 'moveUp'); break;
+    case 'moveDown':     moveTimerTo(t, timers().indexOf(t) + 1); focusMoved(t, 'moveDown'); break;
+    case 'removeTimer':  removeTimer(t); break;
+    case 'bgRemove':     removeTimerBackground(t); break;
+    case 'bgAll':        applyBackgroundToAll(t); break;
+    default: break;
+  }
+  // After a mouse click, drop focus so Space keeps meaning "start/pause all"
+  if (event && event.detail > 0 && !/^move/.test(action) && document.activeElement && document.activeElement.blur) document.activeElement.blur();
+}
+
+/** Keeps keyboard focus on the same move button after the cards are rebuilt. */
+function focusMoved(t, action) {
+  const ui = rt(t).ui;
+  const btn = ui && $(`[data-taction="${action}"]`, ui.card);
+  if (btn && !btn.disabled) btn.focus();
+  else if (ui) $('[data-taction="toggle"]', ui.card).focus();
+}
+
+/* ----- Drag and drop reordering (cards via their grip, stage tiles directly) ----- */
+let dragTimer = null;
+function bindDragAndDrop() {
+  // Cards: only draggable while the grip is pressed, so text fields keep normal selection.
+  timerListEl.addEventListener('pointerdown', (e) => {
+    const grip = e.target.closest('[data-taction="grip"]');
+    const card = e.target.closest('.timer-card');
+    if (card) card.draggable = !!grip;
+  });
+  timerListEl.addEventListener('dragstart', (e) => {
+    const card = e.target.closest('.timer-card');
+    if (!card || !card.draggable) return;
+    dragTimer = timers()[+card.dataset.index];
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', dragTimer.label); } catch (error) { /* ignore */ }
+    card.classList.add('dragging');
+  });
+  timerListEl.addEventListener('dragover', (e) => {
+    if (!dragTimer) return;
+    e.preventDefault();
+    $$('.timer-card', timerListEl).forEach((c) => c.classList.remove('drop-before', 'drop-after'));
+    const card = e.target.closest('.timer-card');
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    card.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drop-before' : 'drop-after');
+  });
+  timerListEl.addEventListener('drop', (e) => {
+    if (!dragTimer) return;
+    e.preventDefault();
+    const card = e.target.closest('.timer-card');
+    if (card) {
+      const rect = card.getBoundingClientRect();
+      let to = +card.dataset.index + (e.clientY < rect.top + rect.height / 2 ? 0 : 1);
+      if (timers().indexOf(dragTimer) < to) to -= 1;
+      moveTimerTo(dragTimer, to);
+    }
+  });
+  timerListEl.addEventListener('dragend', () => {
+    dragTimer = null;
+    $$('.timer-card', timerListEl).forEach((c) => { c.classList.remove('dragging', 'drop-before', 'drop-after'); c.draggable = false; });
+  });
+
+  // Stage tiles: drag one onto another to place it there.
+  stageEl.addEventListener('dragstart', (e) => {
+    const tileEl = e.target.closest('.tile');
+    if (!tileEl) return;
+    dragTimer = timers()[+tileEl.dataset.index];
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', dragTimer.label); } catch (error) { /* ignore */ }
+    tileEl.classList.add('dragging');
+  });
+  stageEl.addEventListener('dragover', (e) => {
+    if (!dragTimer) return;
+    e.preventDefault();
+    $$('.tile', stageEl).forEach((x) => x.classList.remove('drop-target'));
+    const tileEl = e.target.closest('.tile');
+    if (tileEl) tileEl.classList.add('drop-target');
+  });
+  stageEl.addEventListener('drop', (e) => {
+    if (!dragTimer) return;
+    e.preventDefault();
+    const tileEl = e.target.closest('.tile');
+    if (tileEl) moveTimerTo(dragTimer, +tileEl.dataset.index);
+  });
+  stageEl.addEventListener('dragend', () => {
+    dragTimer = null;
+    $$('.tile', stageEl).forEach((x) => x.classList.remove('dragging', 'drop-target'));
+  });
+}
+
+/* ---------- 8. SETTINGS PANEL ------------------------------------------ */
+const systemLightQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+
+function applyTheme() {
+  const resolved = settings.theme === 'auto'
+    ? (systemLightQuery && systemLightQuery.matches ? 'light' : 'dark') : settings.theme;
+  document.documentElement.dataset.theme = resolved;
+  return resolved;
+}
+
+function syncSettingsUi() {
+  $('#themeSelect').value = settings.theme;
+  $('#optLabels').checked = settings.showLabels;
+  $('#msgDuration').value = String(settings.messageSeconds);
+  $('#optMs').checked = settings.showMs;
+  $('#optSound').checked = settings.sound;
+  $('#optVolume').value = settings.volume;
+  $('#optDefaultWarn').value = formatDuration(settings.defaultWarn);
+  $('#optDefaultRed').value = formatDuration(settings.defaultRed);
+  const mute = $('#btnMute');
+  mute.textContent = settings.sound ? 'Sound on' : 'Muted';
+  mute.setAttribute('aria-pressed', String(!settings.sound));
+}
+
+function bindSettingsPanel() {
+  $('#themeSelect').addEventListener('change', (e) => { settings.theme = e.target.value; applyTheme(); saveSettings(); lastBroadcastKey = ''; refresh(); });
+  if (systemLightQuery) systemLightQuery.addEventListener('change', () => { if (settings.theme === 'auto') { applyTheme(); lastBroadcastKey = ''; refresh(); } });
+  $('#optLabels').addEventListener('change', (e) => { settings.showLabels = e.target.checked; saveSettings(); refresh(); });
+  $('#msgDuration').addEventListener('change', (e) => { settings.messageSeconds = Number(e.target.value); saveSettings(); });
+  $('#optMs').addEventListener('change', (e) => { settings.showMs = e.target.checked; saveSettings(); refresh(); });
+  $('#optSound').addEventListener('change', (e) => { settings.sound = e.target.checked; ensureAudio(); saveSettings(); syncSettingsUi(); });
+  $('#optVolume').addEventListener('input', (e) => { settings.volume = Number(e.target.value); saveSettings(); });
+  $('#optVolume').addEventListener('change', () => playChime(1, true));
+  $$('[data-preview]').forEach((b) => b.addEventListener('click', () => playChime(+b.dataset.preview, true)));
+  for (const [id, key] of [['#optDefaultWarn', 'defaultWarn'], ['#optDefaultRed', 'defaultRed']]) {
+    $(id).addEventListener('change', (e) => {
+      const seconds = parseTimeInput(e.target.value);
+      if (seconds === null) showToast('Could not read that time');
+      else settings[key] = seconds;
+      e.target.value = formatDuration(settings[key]);
+      saveSettings();
+    });
+  }
+}
+
+/* ---------- 9. PRESETS -------------------------------------------------- */
+const presetListEl = $('#presetList');
+
+function renderPresets() {
+  if (!settings.presets.length) {
+    presetListEl.innerHTML = '<li class="empty" style="display:block">No presets yet. Save your current timers to reuse them later.</li>';
+    return;
+  }
+  presetListEl.innerHTML = settings.presets.map((p, i) => {
+    const segs = p.timers.reduce((sum, t) => sum + t.segments.length, 0);
+    return `<li data-index="${i}">
+      <button class="btn" data-preset="load" title="Load preset">${escapeHtml(p.name)}</button>
+      <span class="preset-meta">${p.timers.length} timer${p.timers.length === 1 ? '' : 's'} · ${segs} seg</span>
+      <button class="btn small icon danger" data-preset="delete" aria-label="Delete preset ${escapeHtml(p.name)}">&times;</button>
+    </li>`;
+  }).join('');
+}
+
+function savePreset() {
+  const input = $('#presetName');
+  const name = input.value.trim().slice(0, 40) || `Preset ${settings.presets.length + 1}`;
+  const data = { name, timers: clone(settings.timers) };
+  const existing = settings.presets.findIndex((p) => p.name.toLowerCase() === name.toLowerCase());
+  if (existing >= 0) { settings.presets[existing] = data; showToast(`Updated preset "${name}"`); }
+  else { settings.presets.push(data); showToast(`Saved preset "${name}"`); }
+  input.value = '';
+  saveSettings();
+  renderPresets();
+}
+
+function loadPreset(index) {
+  const preset = settings.presets[index];
+  if (!preset) return;
+  if (anyLive() && !confirm('Loading a preset will reset the running timers. Continue?')) return;
+  settings.timers = clone(preset.timers);
+  selectedTimer = settings.timers[0];
+  gcImages();
+  saveSettings();
+  renderTimers();
+  refresh();
+  showToast(`Loaded "${preset.name}"`);
+}
+
+function deletePreset(index) {
+  const preset = settings.presets[index];
+  if (!preset || !confirm(`Delete preset "${preset.name}"?`)) return;
+  settings.presets.splice(index, 1);
+  gcImages();
+  saveSettings();
+  renderPresets();
+}
+
+/* ---------- 10. STAGE MODE, STAGE WINDOW, SYNC ------------------------- */
+const channel = ('BroadcastChannel' in window) ? new BroadcastChannel(CHANNEL_NAME) : null;
+const REMOTE_ACTIONS = ['toggleAll', 'resetAll', 'reset', 'add', 'sub', 'next', 'prev', 'clearMessage'];
+const isRemoteAction = (a) => REMOTE_ACTIONS.includes(a) || /^toggle:\d+$/.test(a);
+
+/** Controller -> stage window. Only sends when something visible changed. */
+function broadcastView(views, force = false) {
+  if (!channel || IS_STAGE_WINDOW) return;
+  const payload = { type: 'view', views, showLabels: settings.showLabels, message: messageState.text, theme: document.documentElement.dataset.theme };
+  const key = JSON.stringify(payload);
+  if (!force && key === lastBroadcastKey) return;
+  lastBroadcastKey = key;
+  try { channel.postMessage(payload); } catch (error) { /* ignore */ }
+}
+
+function enterStage() {
+  document.body.classList.add('stage-mode');
+  showHud();
+  layoutStage();
+  try { const p = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(() => {}); } catch (error) { /* fullscreen refused: the fixed overlay still fills the window */ }
+}
+
+function exitStage() {
+  document.body.classList.remove('stage-mode', 'hud-on');
+  try { if (document.fullscreenElement) document.exitFullscreen(); } catch (error) { /* ignore */ }
+  layoutStage();
+}
+
+function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => {});
+  } catch (error) { /* ignore */ }
+}
+
+function toggleStageMode() {
+  if (IS_STAGE_WINDOW) { toggleFullscreen(); return; }
+  if (document.body.classList.contains('stage-mode')) exitStage(); else enterStage();
+}
+
+function openStageWindow() {
+  if (!channel) { showToast('Separate stage window needs BroadcastChannel; use Stage display instead'); return; }
+  const url = location.href.split('#')[0].split('?')[0] + '?stage=1';
+  const win = window.open(url, 'speakerTimerStage', 'popup,width=1280,height=720');
+  if (!win) showToast('Pop-up blocked. Allow pop-ups for this page.');
+}
+
+let hudTimer = 0;
+function showHud() {
+  if (!document.body.classList.contains('stage-mode')) return;
+  document.body.classList.add('hud-on');
+  clearTimeout(hudTimer);
+  hudTimer = setTimeout(() => document.body.classList.remove('hud-on'), 3000);
+}
+
+/* ---------- 11. EVENTS + BOOTSTRAP ------------------------------------- */
+/** Single entry point for every global button and shortcut. */
+function runAction(action) {
+  // In the stage window the controller owns the clocks, so forward the command.
+  if (IS_STAGE_WINDOW && action !== 'stage' && action !== 'mute') {
+    if (channel && isRemoteAction(action)) channel.postMessage({ type: 'cmd', action });
+    return;
+  }
+  const toggleMatch = /^toggle:(\d+)$/.exec(action);
+  if (toggleMatch) {
+    const t = timers()[+toggleMatch[1]];
+    if (t) { selectTimer(t); toggleTimer(t); }
+    return;
+  }
+  const sel = getSelected();
+  switch (action) {
+    case 'toggleAll': toggleAll(); break;
+    case 'resetAll':  timers().forEach(restartSequence); break;
+    case 'reset':     resetTimer(sel); break;
+    case 'add':       adjustTime(sel, 60); break;
+    case 'sub':       adjustTime(sel, -60); break;
+    case 'next':      runTimerAction(sel, 'next'); break;
+    case 'prev':      runTimerAction(sel, 'prev'); break;
+    case 'stage':     toggleStageMode(); break;
+    case 'popup':     openStageWindow(); break;
+    case 'mute':
+      settings.sound = !settings.sound; ensureAudio(); saveSettings(); syncSettingsUi();
+      showToast(settings.sound ? 'Sound on' : 'Sound muted'); break;
+    case 'addTimer':  addTimer(); break;
+    case 'sendMessage':  sendMessageFromInput(); break;
+    case 'clearMessage': clearMessage(); break;
+    case 'savePreset': savePreset(); break;
+    default: break;
+  }
+}
+
+function isTypingTarget(el) {
+  return !!el && (el.isContentEditable || (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'range'));
+}
+
+function handleKeydown(event) {
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  if (isTypingTarget(event.target)) return;
+  if (document.body.classList.contains('stage-mode')) showHud();
+  let action = null;
+  if (/^[1-9]$/.test(event.key)) action = `toggle:${+event.key - 1}`;
+  else switch (event.key) {
+    case ' ':          action = 'toggleAll'; break;
+    case 'r': case 'R': action = event.shiftKey ? 'resetAll' : 'reset'; break;
+    case 'n': case 'N': case 'ArrowRight': action = 'next'; break;
+    case 'p': case 'P': case 'ArrowLeft':  action = 'prev'; break;
+    case 'ArrowUp': case '+': case '=': action = 'add'; break;
+    case 'ArrowDown': case '-': case '_': action = 'sub'; break;
+    case 'f': case 'F': action = 'stage'; break;
+    case 'm': case 'M': action = 'mute'; break;
+    case 'c': case 'C': action = 'clearMessage'; break;
+    case 'Escape':
+      if (!IS_STAGE_WINDOW && document.body.classList.contains('stage-mode')) { exitStage(); event.preventDefault(); }
+      return;
+    default: return;
+  }
+  event.preventDefault();
+  if (event.repeat && action !== 'add' && action !== 'sub') return;
+  runAction(action);
+}
+
+function bootstrapController() {
+  applyTheme();
+  syncSettingsUi();
+  renderTimers();
+  renderPresets();
+  bindSettingsPanel();
+  bindDragAndDrop();
+  timers().forEach(initSegmentFlags);
+  restoreRunState();
+  timers().forEach(updateActiveRow);
+  updateSelected();
+  renderMessageChips();
+  refresh();
+  layoutStage();
+  loadStoredImages();
+
+  // Message box: Enter sends, chips send instantly
+  $('#msgText').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessageFromInput(); } });
+  $('#messageChips').addEventListener('click', (e) => { const chip = e.target.closest('[data-msg]'); if (chip) { sendMessage(chip.dataset.msg); chip.blur(); } });
+  if ('ResizeObserver' in window) new ResizeObserver(layoutStage).observe(stageEl);
+
+  // Timer as a backup for rAF (which pauses in hidden/occluded windows)
+  setInterval(() => { if (anyRunning()) { tick(); updateDisplay(); } }, 200);
+  setInterval(messageTick, 1000);
+  setInterval(() => { if (anyLive()) persistRun(true); }, 5000);   // heartbeat for refresh recovery
+
+  // Page Visibility: timestamps keep the clocks exact; resync instantly on return.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { if (anyRunning()) requestWakeLock(); ensureAudio(); }
+    refresh();
+  });
+  window.addEventListener('pageshow', refresh);
+  window.addEventListener('focus', refresh);
+
+  // Guard against accidental refresh/close mid-talk
+  window.addEventListener('beforeunload', (e) => { if (anyLive()) { e.preventDefault(); e.returnValue = ''; } });
+
+  // Timer card events (one delegated set for every card)
+  const cardOf = (e) => { const card = e.target.closest('.timer-card'); return card ? timers()[+card.dataset.index] : null; };
+  timerListEl.addEventListener('pointerdown', (e) => { const t = cardOf(e); if (t) selectTimer(t); });
+  timerListEl.addEventListener('focusin', (e) => { const t = cardOf(e); if (t) selectTimer(t); });
+  timerListEl.addEventListener('click', (e) => {
+    const t = cardOf(e);
+    if (!t) return;
+    const segBtn = e.target.closest('[data-seg]');
+    if (segBtn) {
+      const index = +segBtn.closest('.seg').dataset.index;
+      ({ go: () => goToSegment(t, index), up: () => moveSegment(t, index, -1), down: () => moveSegment(t, index, 1), remove: () => removeSegment(t, index) })[segBtn.dataset.seg]();
+      return;
+    }
+    const btn = e.target.closest('[data-taction]');
+    if (btn && !btn.disabled) runTimerAction(t, btn.dataset.taction, e);
+  });
+  const onField = (e) => {
+    const t = cardOf(e);
+    if (!t) return;
+    if (e.target.closest('[data-field]')) handleSegmentFieldChange(t, e);
+    else if (e.target.closest('[data-tfield]')) handleTimerFieldChange(t, e);
+  };
+  timerListEl.addEventListener('change', onField);
+  timerListEl.addEventListener('input', onField);
+  timerListEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input[type="text"]')) e.target.blur(); });
+
+  // Preset events
+  presetListEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-preset]');
+    if (!btn) return;
+    const index = +btn.closest('li').dataset.index;
+    if (btn.dataset.preset === 'load') loadPreset(index); else deletePreset(index);
+  });
+  $('#presetName').addEventListener('keydown', (e) => { if (e.key === 'Enter') savePreset(); });
+
+  // Stage window messages
+  if (channel) channel.onmessage = (e) => {
+    const msg = e.data || {};
+    if (msg.type === 'cmd' && isRemoteAction(msg.action)) runAction(msg.action);
+    else if (msg.type === 'hello') { lastBroadcastKey = ''; sendImages(); updateDisplay(); }
+  };
+
+  stageEl.addEventListener('dblclick', toggleStageMode);
+}
+
+function bootstrapStageWindow() {
+  document.body.classList.add('stage-only', 'stage-mode', 'hud-on');
+  $('#hudExit').textContent = 'Fullscreen';
+  applyTheme();
+  const waiting = [{
+    index: 0, text: '--:--', ms: '', chars: 5, state: 'idle', status: 'idle', statusText: '', counter: '', next: '', progress: 0,
+    label: channel ? 'Waiting for the control window…' : 'Live sync is not supported in this browser'
+  }];
+  renderStage(waiting, true);
+  layoutStage();
+  if ('ResizeObserver' in window) new ResizeObserver(layoutStage).observe(stageEl);
+  if (channel) {
+    let received = false;
+    let lastStageMsg = null;
+    channel.onmessage = (e) => {
+      const msg = e.data || {};
+      if (msg.type === 'images' && msg.images) {
+        Object.entries(msg.images).forEach(([id, url]) => imageCache.set(id, url));
+        if (lastStageMsg) renderStage(lastStageMsg.views, lastStageMsg.showLabels, lastStageMsg.message || '');
+        return;
+      }
+      if (msg.type !== 'view') return;
+      received = true;
+      lastStageMsg = msg;
+      if (msg.theme) document.documentElement.dataset.theme = msg.theme;
+      renderStage(msg.views, msg.showLabels, msg.message || '');
+      const running = msg.views.some((v) => v.status === 'running');
+      const paused = msg.views.some((v) => v.status === 'paused');
+      $$('[data-toggle-all-label]').forEach((el) => setText(el, running ? 'Pause all' : paused ? 'Resume all' : 'Start all'));
+    };
+    channel.postMessage({ type: 'hello' });
+    setInterval(() => { if (!received) channel.postMessage({ type: 'hello' }); }, 1500);
+  }
+  stageEl.addEventListener('dblclick', toggleFullscreen);
+}
+
+/* Shared listeners */
+document.addEventListener('click', (event) => {
+  const el = event.target.closest('[data-action]');
+  if (!el || el.disabled) return;
+  runAction(el.dataset.action);
+  if (event.detail > 0) el.blur();     // mouse click: keep Space for start/pause, not "press the focused button"
+});
+document.addEventListener('keydown', handleKeydown);
+document.addEventListener('keyup', (e) => { if (e.key === ' ' && !isTypingTarget(e.target) && e.target.tagName === 'BUTTON') e.preventDefault(); });
+['mousemove', 'touchstart', 'pointerdown'].forEach((type) => document.addEventListener(type, showHud, { passive: true }));
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && !IS_STAGE_WINDOW && document.body.classList.contains('stage-mode')) exitStage();
+});
+
+/* Flush everything the moment the page is hidden or closed (controller only, so a
+   stage window can never overwrite the operator's saved data). */
+function flushState() {
+  if (IS_STAGE_WINDOW) return;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch (error) { /* ignore */ }
+  persistRun(true);
+}
+window.addEventListener('pagehide', flushState);
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushState(); });
+
+if (IS_STAGE_WINDOW) bootstrapStageWindow(); else bootstrapController();
+
+})();
+</script>
+</body>
+</html>
