@@ -138,10 +138,11 @@ body.stage-mode .stage { position: fixed; inset: 0; z-index: 100; border: 0; box
 .stage-counter { flex: none; max-width: 60%; opacity: .75; font-size: .6em; }
 .stage-time {
   align-self: center; justify-self: center;
-  font-family: var(--mono); font-weight: 700; line-height: 1;
-  font-variant-numeric: tabular-nums; white-space: nowrap;
-  /* ~0.6em per monospace glyph: 150cqw / chars keeps the digits inside ~90% of the width */
-  font-size: min(calc(150cqw / var(--chars)), 58cqh);
+  font-family: var(--stage-font, var(--mono)); font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums lining-nums; white-space: nowrap;
+  /* ~0.6em per monospace glyph: 150cqw / chars keeps the digits inside ~90% of the width.
+     --fit narrows the size for fonts with wider digits (see the stage font options). */
+  font-size: min(calc(150cqw * var(--fit, 1) / var(--chars)), 58cqh);
   transition: opacity .2s;
 }
 .stage-time .ms { font-size: .4em; opacity: .8; }
@@ -338,14 +339,14 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .timer-card[data-state="red"] .dot, .timer-card[data-state="overtime"] .dot, .timer-card[data-state="finished"] .dot { background: var(--red); }
 /* LCD readout */
 .readout {
-  padding: 3px 10px; background: #0d0c09; color: #46ff8e; border: 2px solid var(--border);
+  padding: 3px 10px; background: #0d0c09; color: var(--lcd-green); border: 2px solid var(--border);
   font: 800 1.4rem var(--mono); font-variant-numeric: tabular-nums; letter-spacing: .04em; white-space: nowrap;
   text-shadow: 0 0 8px rgba(70, 255, 142, .45);
 }
 .timer-card[data-state="idle"] .readout { color: #f4f0e1; text-shadow: none; }
-.timer-card[data-state="yellow"] .readout { color: #ffd21f; text-shadow: 0 0 8px rgba(255, 210, 31, .45); }
+.timer-card[data-state="yellow"] .readout { color: var(--lcd-yellow); text-shadow: 0 0 8px rgba(255, 210, 31, .45); }
 .timer-card[data-state="red"] .readout, .timer-card[data-state="overtime"] .readout,
-.timer-card[data-state="finished"] .readout { color: #ff4a36; text-shadow: 0 0 8px rgba(255, 74, 54, .5); }
+.timer-card[data-state="finished"] .readout { color: var(--lcd-red); text-shadow: 0 0 8px rgba(255, 74, 54, .5); }
 
 .timer-opts { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin: 12px 0; }
 .timer-opts select, .timer-opts input[type="time"] { width: auto; }
@@ -360,7 +361,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .seg-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
 .seg {
   display: grid; gap: 8px 10px; align-items: end; padding: 10px;
-  grid-template-columns: auto minmax(120px, 1fr) repeat(3, minmax(64px, 84px)) auto;
+  grid-template-columns: auto minmax(120px, 1fr) repeat(3, minmax(64px, 84px)) minmax(96px, 112px) auto;
   background: var(--field); border: 2px solid var(--border);
 }
 .seg.active { box-shadow: inset 7px 0 0 var(--accent); }
@@ -374,6 +375,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
   .seg-tools { order: 2; grid-column: 2 / -1; justify-content: flex-end; align-self: center; }
   .seg .f-name { order: 3; grid-column: 1 / -1; }
   .seg > label { order: 4; min-width: 0; }
+  .seg > .f-note { order: 5; grid-column: 1 / -1; }
 }
 
 /* Drag and drop reordering */
@@ -402,6 +404,23 @@ body:not(.stage-only) .tile { cursor: grab; }
 .log-table .under { color: var(--green); font-weight: 700; }
 .log-table small { color: var(--muted); }
 .btn.small.primary { min-width: 0; }
+
+/* ==========================================================================
+   8. STAGE APPEARANCE OPTIONS: digit fonts, colour-blind-safe palette,
+      cue notes, spotlight
+   ========================================================================== */
+:root { --lcd-green: #46ff8e; --lcd-yellow: #ffd21f; --lcd-red: #ff4a36; }
+/* Okabe-Ito inspired: blue-green / yellow / vermillion stay distinct for the common colour-vision types */
+:root[data-palette="safe"] { --green: #009e73; --yellow: #f0e442; --red: #d55e00; --lcd-green: #2fd0a8; --lcd-yellow: #f0e442; --lcd-red: #ff8a3d; }
+:root[data-palette="safe"] .stage { --green: #2fd0a8; --yellow: #f0e442; --red: #e8650f; }
+.stage[data-font="sans"]    { --stage-font: var(--sans); --fit: 1.04; }
+.stage[data-font="display"] { --stage-font: var(--display); --fit: .8; }
+.stage[data-font="serif"]   { --stage-font: Georgia, "Times New Roman", serif; --fit: .92; }
+.tile[hidden] { display: none; }
+.stage-note { text-align: center; font: 700 max(4.2cqmin, 12px)/1.2 var(--sans); text-wrap: balance; }
+.stage-note:empty { display: none; }
+.btn.active { background: var(--accent); color: var(--on-accent); }
+.f-note { grid-column: 2 / -1; }
 </style>
 </head>
 <body>
@@ -443,8 +462,8 @@ body:not(.stage-only) .tile { cursor: grab; }
         <p class="hint mt">
           <kbd>Space</kbd> start/pause all &middot; <kbd>1</kbd>&ndash;<kbd>9</kbd> start/pause that timer &middot;
           <kbd>R</kbd> reset selected &middot; <kbd>N</kbd>/<kbd>P</kbd> next/prev &middot; <kbd>&uarr;</kbd>/<kbd>&darr;</kbd> &plusmn;1 min (selected timer) &middot;
-          <kbd>U</kbd> undo &middot; <kbd>F</kbd> stage &middot; <kbd>M</kbd> mute &middot; <kbd>C</kbd> clear message &middot; <kbd>Esc</kbd> exit stage.
-          Drag timers (cards or stage tiles) to reorder them.
+          <kbd>U</kbd> undo &middot; <kbd>S</kbd> spotlight the selected timer &middot; <kbd>F</kbd> stage &middot; <kbd>M</kbd> mute &middot; <kbd>C</kbd> clear message &middot; <kbd>Esc</kbd> exit stage.
+          Drag timers (cards or stage tiles) to reorder them. In full screen, <kbd>PageDown</kbd>/<kbd>PageUp</kbd> (presentation clickers) go to the next/previous segment and <kbd>.</kbd> pauses or resumes.
         </p>
       </div>
 
@@ -491,6 +510,13 @@ body:not(.stage-only) .tile { cursor: grab; }
             <button class="btn small" data-action="testVoice" id="btnTestVoice">Voice</button>
           </div>
         </div>
+        <div class="row" style="margin-bottom:10px">
+          <label><span class="lbl">Chime sound</span><select id="optChime">
+            <option value="soft">Soft</option><option value="bell">Bell</option><option value="digital">Digital</option><option value="gong">Gong</option></select></label>
+          <label><span class="lbl">Stage digits font</span><select id="optFont">
+            <option value="mono">Mono</option><option value="sans">Sans</option><option value="display">Heavy</option><option value="serif">Serif</option></select></label>
+        </div>
+        <label class="opt"><input type="checkbox" id="optSafe"><span><b>Colour-blind safe colours</b><small>Use blue-green, yellow and orange instead of green, yellow and red on the stage.</small></span></label>
         <div class="row">
           <label><span class="lbl">Default yellow at (time left)</span><input type="text" inputmode="numeric" id="optDefaultWarn" autocomplete="off"></label>
           <label><span class="lbl">Default red at (time left)</span><input type="text" inputmode="numeric" id="optDefaultRed" autocomplete="off"></label>
@@ -544,6 +570,7 @@ body:not(.stage-only) .tile { cursor: grab; }
   <button class="btn primary" data-action="toggleAll"><span data-toggle-all-label>Start all</span></button>
   <button class="btn" data-action="resetAll">Reset all</button>
   <button class="btn" data-action="undo">Undo</button>
+  <button class="btn" data-action="spotlight" title="Show only the selected timer, or all timers again">Spotlight</button>
   <button class="btn" data-action="sub" title="Remove a minute from the selected timer">&minus;1 min</button>
   <button class="btn" data-action="add" title="Add a minute to the selected timer">+1 min</button>
   <button class="btn" data-action="stage" id="hudExit">Exit stage</button>
@@ -581,6 +608,7 @@ const MAX_SECONDS = 359999;   // 99:59:59
 const MAX_SEGMENTS = 50;
 const MAX_TIMERS = 12;
 const MAX_LOG = 500;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;   // HH:MM, 24 hour
 
 const $  = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -664,7 +692,7 @@ function showToast(message) {
 /* ---------- 2. SETTINGS + STORAGE -------------------------------------- */
 function createDefaultTimers() {
   return [{
-    label: 'Main talk', mode: 'down', overtime: true, autoAdvance: true, startAt: '', bg: '', bgDim: 50,
+    label: 'Main talk', mode: 'down', overtime: true, autoAdvance: true, loop: false, startAt: '', bg: '', bgDim: 50,
     segments: [
       { name: 'Intro',   duration: 120, warn: 30,  red: 10 },
       { name: 'Keynote', duration: 900, warn: 120, red: 30 },
@@ -676,7 +704,7 @@ function createDefaultTimers() {
 function createDefaultSettings() {
   return {
     theme: 'light',           // light (Paper) | dark (Ink) | contrast | auto
-    sound: true, volume: 0.6, speak: false,
+    sound: true, volume: 0.6, speak: false, chime: 'soft', stageFont: 'mono', colorblind: false,
     showMs: false, showLabels: true, showEnds: false, showClock: false,
     messageSeconds: 15, recentMessages: [],
     defaultWarn: 120, defaultRed: 30,
@@ -690,9 +718,11 @@ function sanitizeSegments(list) {
     name: String((s && s.name) ?? `Segment ${i + 1}`).slice(0, 40),
     duration: clamp(Math.round(Number(s && s.duration) || 0), 0, MAX_SECONDS),
     warn: clamp(Math.round(Number(s && s.warn) || 0), 0, MAX_SECONDS),
-    red: clamp(Math.round(Number(s && s.red) || 0), 0, MAX_SECONDS)
+    red: clamp(Math.round(Number(s && s.red) || 0), 0, MAX_SECONDS),
+    endAt: s && TIME_RE.test(s.endAt) ? s.endAt : '',      // optional: finish at this time of day
+    note: String((s && s.note) || '').slice(0, 80)           // cue note shown on stage
   }));
-  return cleaned.length ? cleaned : [{ name: 'Segment 1', duration: 300, warn: 120, red: 30 }];
+  return cleaned.length ? cleaned : [{ name: 'Segment 1', duration: 300, warn: 120, red: 30, endAt: '', note: '' }];
 }
 
 function sanitizeTimers(list) {
@@ -701,7 +731,8 @@ function sanitizeTimers(list) {
     mode: t && t.mode === 'up' ? 'up' : 'down',
     overtime: !t || t.overtime !== false,
     autoAdvance: !t || t.autoAdvance !== false,
-    startAt: t && /^([01]\d|2[0-3]):[0-5]\d$/.test(t.startAt) ? t.startAt : '',
+    startAt: t && TIME_RE.test(t.startAt) ? t.startAt : '',
+    loop: !!t && t.loop === true,
     bg: t && typeof t.bg === 'string' ? t.bg.slice(0, 40) : '',
     bgDim: t && t.bgDim !== undefined && Number.isFinite(Number(t.bgDim)) ? clamp(Math.round(Number(t.bgDim)), 0, 85) : 50,
     segments: sanitizeSegments(t && t.segments)
@@ -722,6 +753,9 @@ function sanitizeSettings(raw) {
     sound: raw.sound !== false,
     volume: clamp(Number(raw.volume ?? base.volume), 0, 1),
     speak: flag('speak'),
+    chime: ['soft', 'bell', 'digital', 'gong'].includes(raw.chime) ? raw.chime : base.chime,
+    stageFont: ['mono', 'sans', 'display', 'serif'].includes(raw.stageFont) ? raw.stageFont : base.stageFont,
+    colorblind: flag('colorblind'),
     showMs: flag('showMs'),
     showLabels: raw.showLabels !== false,
     showEnds: flag('showEnds'),
@@ -771,6 +805,8 @@ function rt(timer) {
         startedAt: 0,       // timestamp of the latest start/resume
         accumulated: 0,     // ms elapsed before the latest start/resume
         adjustMs: 0,        // +/- minute adjustments for the current segment
+        override: 0,        // base length (ms) of a segment that ends at a fixed time of day
+        laps: 0,            // completed passes through a repeating chain
         logged: false,      // this segment is already in the run log
         fired: { warn: false, red: false, end: false }   // marks already announced
       },
@@ -802,8 +838,34 @@ function saveLog() {
 const eng = (t) => rt(t).engine;
 const currentSegment = (t) => t.segments[eng(t).index];
 /** A countdown always has a target; a count-up only has one if its length is > 0. */
-const hasTarget = (t) => t.mode === 'down' || currentSegment(t).duration > 0;
-const getDurationMs = (t) => (hasTarget(t) ? Math.max(1000, currentSegment(t).duration * 1000 + eng(t).adjustMs) : 0);
+const hasTarget = (t) => t.mode === 'down' || currentSegment(t).duration > 0 || !!currentSegment(t).endAt;
+
+/** The next HH:MM at or after (from - 6 h): a time that just passed counts as "now", not tomorrow. */
+function endTargetFor(seg, from) {
+  const [hours, minutes] = seg.endAt.split(':').map(Number);
+  const target = new Date(from);
+  target.setHours(hours, minutes, 0, 0);
+  const ts = target.getTime();
+  return ts < from - 6 * 3600 * 1000 ? ts + 86400000 : ts;
+}
+
+/** Segment length before +/-1 min adjustments. Segments with an "ends at" time are measured to the clock. */
+function getBaseMs(t) {
+  const seg = currentSegment(t);
+  const e = eng(t);
+  if (seg.endAt) {
+    if (e.status === 'idle') return endTargetFor(seg, Date.now()) - Date.now();   // live until started
+    if (e.override) return e.override;
+  }
+  return seg.duration * 1000;
+}
+const getDurationMs = (t) => (hasTarget(t) ? Math.max(1000, getBaseMs(t) + eng(t).adjustMs) : 0);
+
+/** Fixes the length of an "ends at" segment at the moment it starts. */
+function armSegment(t, startTs) {
+  const seg = currentSegment(t);
+  eng(t).override = seg.endAt ? Math.max(1000, endTargetFor(seg, startTs) - startTs) : 0;
+}
 const getElapsedMs = (t, now = Date.now()) => {
   const e = eng(t);
   return e.status === 'running' ? e.accumulated + Math.max(0, now - e.startedAt) : e.accumulated;
@@ -815,7 +877,8 @@ const anyLive = () => timers().some(isLive);
 const timerName = (t) => t.label || `Timer ${timers().indexOf(t) + 1}`;
 const segmentName = (t) => currentSegment(t).name || `Segment ${eng(t).index + 1}`;
 
-let selectedTimer = timers()[0];   // target of the R / N / P / +-1 min shortcuts
+let selectedTimer = timers()[0];   // target of the R / N / P / S / +-1 min shortcuts
+let spotlightTimer = null;         // when set, the stage shows only this timer
 const getSelected = () => (timers().includes(selectedTimer) ? selectedTimer : (selectedTimer = timers()[0]));
 
 /** Marks thresholds already behind us as "fired" so starting a short segment is silent. */
@@ -852,7 +915,7 @@ function startTimer(t) {
   const e = eng(t);
   if (e.status === 'finished') restartSequence(t);
   if (e.status === 'running') return;
-  if (e.status === 'idle') { e.accumulated = 0; e.logged = false; initSegmentFlags(t); }
+  if (e.status === 'idle') { e.accumulated = 0; e.logged = false; armSegment(t, Date.now()); initSegmentFlags(t); }
   e.startedAt = Date.now();
   e.status = 'running';
   refresh();
@@ -894,6 +957,7 @@ function resetTimer(t, { log = true } = {}) {
   e.status = 'idle';
   e.accumulated = 0;
   e.adjustMs = 0;
+  e.override = 0;
   e.logged = false;
   initSegmentFlags(t);
   updateActiveRow(t);
@@ -904,6 +968,7 @@ function resetTimer(t, { log = true } = {}) {
 function restartSequence(t) {
   logSegment(t, 'stopped');
   eng(t).index = 0;
+  eng(t).laps = 0;
   resetTimer(t, { log: false });
 }
 
@@ -917,6 +982,7 @@ function goToSegment(t, index) {
   e.adjustMs = 0;
   e.logged = false;
   e.startedAt = Date.now();
+  armSegment(t, e.startedAt);
   e.status = wasRunning ? 'running' : 'idle';
   initSegmentFlags(t);
   updateActiveRow(t);
@@ -929,7 +995,7 @@ function adjustTime(t, deltaSeconds) {
   const e = eng(t);
   const wasFinished = e.status === 'finished';
   e.adjustMs += deltaSeconds * 1000;
-  e.adjustMs = Math.max(e.adjustMs, 1000 - currentSegment(t).duration * 1000);   // keep >= 1 s total
+  e.adjustMs = Math.max(e.adjustMs, 1000 - getBaseMs(t));                      // keep >= 1 s total
   if (wasFinished) { e.status = 'running'; e.startedAt = Date.now(); e.logged = false; }
   if (e.status !== 'running') handleThresholds(t, getRemainingMs(t));            // silently re-arm marks
   showToast(`${timers().length > 1 ? timerName(t) + ': ' : ''}${formatSigned(deltaSeconds)}`);
@@ -977,15 +1043,16 @@ function tickTimer(t, now, events = []) {
     if (remaining > 0) break;
 
     const isLast = e.index >= t.segments.length - 1;
-    if (t.autoAdvance && !isLast) {
+    if (t.autoAdvance && (!isLast || t.loop)) {
       // The next segment starts exactly when this one ended, so no time is lost or gained.
       logSegment(t, 'completed', getDurationMs(t));
       const endMoment = e.startedAt + (getDurationMs(t) - e.accumulated);
-      e.index += 1;
+      if (isLast) { e.index = 0; e.laps += 1; } else e.index += 1;
       e.accumulated = 0;
       e.adjustMs = 0;
       e.logged = false;
       e.startedAt = endMoment;
+      armSegment(t, endMoment);
       initSegmentFlags(t);
       segmentChanged = true;
       continue;
@@ -1033,7 +1100,7 @@ function engineSnapshot() {
   return timers().map((t) => {
     const e = eng(t);
     return { segs: t.segments.length, index: e.index, status: e.status, startedAt: e.startedAt,
-             accumulated: e.accumulated, adjustMs: e.adjustMs, logged: e.logged, fired: { ...e.fired } };
+             accumulated: e.accumulated, adjustMs: e.adjustMs, override: e.override, laps: e.laps, logged: e.logged, fired: { ...e.fired } };
   });
 }
 
@@ -1047,6 +1114,8 @@ function applyEngineSnapshot(entries, { lastSeen = Date.now(), stale = false } =
     const e = eng(t);
     e.index = clamp(Math.round(Number(s.index) || 0), 0, t.segments.length - 1);
     e.adjustMs = Number(s.adjustMs) || 0;
+    e.override = Number(s.override) || 0;
+    e.laps = Math.max(0, Math.round(Number(s.laps) || 0));
     e.accumulated = Math.max(0, Number(s.accumulated) || 0);
     e.startedAt = Number(s.startedAt) || 0;
     e.logged = !!s.logged;
@@ -1100,21 +1169,35 @@ function ensureAudio() {
   } catch (error) { /* audio unavailable */ }
 }
 
-/** One soft sine beep with a short fade in/out so it never clicks. */
-function playTone(frequency, startOffset, duration, volume) {
+/** One note in the chosen chime style, always with a fade in/out so it never clicks. */
+function playTone(frequency, startOffset, duration, volume, style) {
   const ctx = audioContext;
   const start = ctx.currentTime + startOffset;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.value = frequency;
-  gain.gain.setValueAtTime(0, start);
-  gain.gain.linearRampToValueAtTime(volume, start + 0.03);
-  gain.gain.setValueAtTime(volume, start + Math.max(0.03, duration - 0.08));
-  gain.gain.linearRampToValueAtTime(0, start + duration);
-  osc.connect(gain).connect(ctx.destination);
-  osc.start(start);
-  osc.stop(start + duration + 0.05);
+  const voices = {                     // [frequency, waveform, relative level]
+    soft:    [[frequency, 'sine', 1]],
+    bell:    [[frequency, 'sine', 1], [frequency * 2.76, 'sine', 0.35]],
+    digital: [[frequency, 'square', 0.35]],
+    gong:    [[frequency / 2, 'triangle', 1], [frequency * 1.5, 'sine', 0.25]]
+  }[style] || [[frequency, 'sine', 1]];
+  const tail = style === 'bell' ? 1.6 : style === 'gong' ? 2.2 : 0;   // ringing decay after the note
+  voices.forEach(([freq, type, level]) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const peak = volume * level;
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(peak, start + 0.02);
+    if (tail) {
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration + tail);
+    } else {
+      gain.gain.setValueAtTime(peak, start + Math.max(0.02, duration - 0.08));
+      gain.gain.linearRampToValueAtTime(0, start + duration);
+    }
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + duration + tail + 0.05);
+  });
 }
 
 /** level 1 = yellow (one beep), 2 = red (two beeps), 3 = end (rising triad). */
@@ -1124,9 +1207,12 @@ function playChime(level, force = false) {
   if (!audioContext) return;
   const v = 0.35 * settings.volume;
   if (v <= 0) return;
-  if (level === 1) playTone(660, 0, 0.25, v);
-  else if (level === 2) { playTone(880, 0, 0.16, v); playTone(880, 0.26, 0.16, v); }
-  else { playTone(523.25, 0, 0.2, v); playTone(659.25, 0.26, 0.2, v); playTone(783.99, 0.52, 0.6, v); }
+  const style = settings.chime;
+  const k = style === 'digital' ? 0.5 : 1;      // crisper, shorter notes for the digital style
+  const note = (freq, at, length) => playTone(freq, at * k, length * k, v, style);
+  if (level === 1) note(660, 0, 0.25);
+  else if (level === 2) { note(880, 0, 0.16); note(880, 0.26, 0.16); }
+  else { note(523.25, 0, 0.2); note(659.25, 0.26, 0.2); note(783.99, 0.52, 0.6); }
 }
 
 const canSpeak = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
@@ -1229,7 +1315,8 @@ function computeView(t, index) {
     label: timerName(t),
     bg: t.bg || '',
     bgDim: t.bgDim ?? 50,
-    counter: total > 1 ? `${e.index + 1} / ${total}` : '',
+    counter: [t.loop && e.laps ? `Lap ${e.laps + 1}` : '', total > 1 ? `${e.index + 1} / ${total}` : ''].filter(Boolean).join(' \u00b7 '),
+    note: seg.note || '',
     next: nextSeg ? `Next: ${nextSeg.name || 'Segment ' + (e.index + 2)} · ${formatDuration(nextSeg.duration)}` : (total > 1 ? 'Final segment' : ''),
     progress: target ? clamp(elapsed / duration, 0, 1) : 0,
     endsAt: e.status === 'running' && target && remaining > 0 ? Math.round(e.startedAt + (duration - e.accumulated)) : 0,
@@ -1249,17 +1336,19 @@ function createTile() {
     <div class="stage-top"><span class="stage-label" data-r="label"></span><span class="stage-counter" data-r="counter"></span></div>
     <div class="stage-time"><span data-r="digits">00:00</span><span class="ms" data-r="ms"></span></div>
     <div class="stage-bottom">
+      <div class="stage-note" data-r="note"></div>
       <div class="progress" aria-hidden="true"><div class="progress-fill" data-r="progress"></div></div>
       <div class="stage-info"><span class="stage-status" data-r="status"></span><span data-r="next"></span></div>
     </div></div>`;
   const ref = (name) => $(`[data-r="${name}"]`, el);
   return { el, bgEl: ref('bg'), label: ref('label'), counter: ref('counter'), digits: ref('digits'), ms: ref('ms'),
-           status: ref('status'), next: ref('next'), progress: ref('progress') };
+           status: ref('status'), next: ref('next'), progress: ref('progress'), note: ref('note') };
 }
 
 /** Picks the column count whose tiles are closest to a comfortable clock shape. */
 function layoutStage() {
-  const n = tiles.length;
+  const visible = tiles.filter((tile) => !tile.el.hidden);   // a spotlight hides all but one
+  const n = visible.length;
   if (!n) return;
   const w = stageEl.clientWidth || 16;
   const h = stageEl.clientHeight || 9;
@@ -1274,12 +1363,14 @@ function layoutStage() {
   stageEl.style.setProperty('--rows', Math.ceil(n / bestCols));
   stageEl.style.setProperty('--gap', n > 1 ? 'max(0.9vmin, 6px)' : '0px');
   // A lone tile on the last row stretches across the row
-  tiles.forEach((tile, i) => { tile.el.style.gridColumn = i === n - 1 ? `span ${bestCols - ((n - 1) % bestCols)}` : ''; });
+  tiles.forEach((tile) => { tile.el.style.gridColumn = ''; });
+  visible[n - 1].el.style.gridColumn = `span ${bestCols - ((n - 1) % bestCols)}`;
 }
 
 /** What the stage shows besides the tiles. Sent to the stage window with every update. */
 const stageOptions = () => ({
-  showLabels: settings.showLabels, showEnds: settings.showEnds, showClock: settings.showClock, message: messageState.text
+  showLabels: settings.showLabels, showEnds: settings.showEnds, showClock: settings.showClock, message: messageState.text,
+  font: settings.stageFont, palette: settings.colorblind ? 'safe' : 'normal', spotlight: timers().indexOf(spotlightTimer)
 });
 
 /** Draws timer views onto the stage. Used by the control window and the stage window alike. */
@@ -1287,16 +1378,22 @@ function renderStage(views, opts) {
   const flag = (value) => (value ? 'on' : 'off');
   if (stageEl.dataset.labels !== flag(opts.showLabels)) stageEl.dataset.labels = flag(opts.showLabels);
   if (stageEl.dataset.clock !== flag(opts.showClock)) { stageEl.dataset.clock = flag(opts.showClock); tickStageClock(); }
+  if (stageEl.dataset.font !== (opts.font || 'mono')) stageEl.dataset.font = opts.font || 'mono';
+  const palette = opts.palette || 'normal';
+  if (document.documentElement.dataset.palette !== palette) document.documentElement.dataset.palette = palette;
   if (opts.message) setText(bannerEl, opts.message);        // keep the words while the banner slides away
   if (stageEl.dataset.message !== flag(opts.message)) stageEl.dataset.message = flag(opts.message);
 
-  let layoutNeeded = false;
+  const spot = Number.isInteger(opts.spotlight) ? opts.spotlight : -1;
+  let layoutNeeded = stageEl._spot !== spot;
+  stageEl._spot = spot;
   while (tiles.length < views.length) { const tile = createTile(); tiles.push(tile); stageEl.appendChild(tile.el); layoutNeeded = true; }
   while (tiles.length > views.length) { tiles.pop().el.remove(); layoutNeeded = true; }
 
   views.forEach((v, i) => {
     const tile = tiles[i];
     tile.el.dataset.index = i;
+    tile.el.hidden = spot >= 0 && i !== spot;
     const bgUrl = v.bg ? imageCache.get(v.bg) : null;
     const bgKey = bgUrl ? v.bg : '';
     if (tile._bg !== bgKey) {
@@ -1313,6 +1410,7 @@ function renderStage(views, opts) {
     setText(tile.ms, v.ms);
     setText(tile.status, v.statusText);
     setText(tile.next, v.next);
+    setText(tile.note, v.note || '');
     if (tile._chars !== v.chars) { tile._chars = v.chars; tile.el.style.setProperty('--chars', v.chars); }
     const scale = v.progress.toFixed(4);
     if (tile._scale !== scale) { tile._scale = scale; tile.progress.style.transform = `scaleX(${scale})`; }
@@ -1342,6 +1440,8 @@ function updateDisplay() {
       setText(ui.toggle, { idle: 'Start', running: 'Pause', paused: 'Resume', finished: 'Restart' }[v.status]);
       setText(ui.readout, v.text + v.ms);
       if (ui.card.dataset.state !== v.state) ui.card.dataset.state = v.state;
+      const spotOn = spotlightTimer === t;
+      if (ui.spotOn !== spotOn) { ui.spotOn = spotOn; ui.spot.setAttribute('aria-pressed', String(spotOn)); ui.spot.classList.toggle('active', spotOn); }
       if (ui.canAdjust !== v.canAdjust) { ui.canAdjust = v.canAdjust; ui.needsTarget.forEach((b) => { b.disabled = !v.canAdjust; }); }
       if (ui.canNext !== v.canNext) { ui.canNext = v.canNext; ui.needsNext.forEach((b) => { b.disabled = !v.canNext; }); }
     }
@@ -1387,6 +1487,7 @@ function refresh() {
   tick();
   updateDisplay();
   ensureFrameLoop();
+  timers().forEach(updateSegmentTotal);
 }
 
 /* ---------- 7. MESSAGES TO THE SPEAKER ---------------------------------- */
@@ -1626,6 +1727,7 @@ function timerCardHtml(t, i) {
       <div class="seg-tools">
         <button class="btn small icon" data-taction="moveUp" aria-label="Move timer ${n} up" ${i === 0 ? 'disabled' : ''}>&uarr;</button>
         <button class="btn small icon" data-taction="moveDown" aria-label="Move timer ${n} down" ${i === timers().length - 1 ? 'disabled' : ''}>&darr;</button>
+        <button class="btn small icon" data-taction="spotlight" data-ref="spot" aria-pressed="false" title="Spotlight: show only this timer on stage (S)" aria-label="Spotlight timer ${n}">&#9678;</button>
         <button class="btn small icon" data-taction="duplicate" title="Duplicate this timer" aria-label="Duplicate timer ${n}">&#10697;</button>
         <button class="btn small icon danger" data-taction="removeTimer" aria-label="Remove timer ${n}" ${timers().length === 1 ? 'disabled' : ''}>&times;</button>
       </div>
@@ -1650,6 +1752,7 @@ function timerCardHtml(t, i) {
       </select>
       <label class="chk"><input type="checkbox" data-tfield="overtime" ${t.overtime ? 'checked' : ''}> Overtime past 00:00</label>
       <label class="chk"><input type="checkbox" data-tfield="autoAdvance" ${t.autoAdvance ? 'checked' : ''}> Auto-advance segments</label>
+      <label class="chk" title="Start again from the first segment after the last one (needs auto-advance)"><input type="checkbox" data-tfield="loop" ${t.loop ? 'checked' : ''}> Repeat chain</label>
       <label class="chk">Auto-start at <input type="time" data-tfield="startAt" value="${t.startAt}" aria-label="Auto-start timer ${n} at this time of day"></label>
     </div>
     <div class="bg-row">
@@ -1677,7 +1780,7 @@ function renderTimers() {
   timers().forEach((t, i) => {
     const card = timerListEl.children[i];
     rt(t).ui = {
-      card, toggle: $('[data-ref="toggle"]', card), readout: $('[data-ref="readout"]', card),
+      card, toggle: $('[data-ref="toggle"]', card), spot: $('[data-ref="spot"]', card), spotOn: false, readout: $('[data-ref="readout"]', card),
       segList: $('[data-ref="segList"]', card), total: $('[data-ref="total"]', card),
       needsTarget: $$('[data-needs-target]', card), needsNext: $$('[data-needs-next]', card),
       bgThumb: $('[data-ref="bgThumb"]', card), bgButtons: $$('[data-needs-bg]', card), bgDimInput: $('[data-tfield="bgDim"]', card),
@@ -1699,11 +1802,13 @@ function renderSegments(t) {
       <label><span>Length</span><input type="text" inputmode="numeric" data-field="duration" autocomplete="off" value="${formatDuration(s.duration)}"></label>
       <label><span>Yellow at</span><input type="text" inputmode="numeric" data-field="warn" autocomplete="off" value="${formatDuration(s.warn)}"></label>
       <label><span>Red at</span><input type="text" inputmode="numeric" data-field="red" autocomplete="off" value="${formatDuration(s.red)}"></label>
+      <label><span>Ends at</span><input type="time" data-field="endAt" value="${s.endAt}" title="Optional: finish at this time of day instead of after a fixed length"></label>
       <div class="seg-tools">
         <button class="btn small icon" data-seg="up" aria-label="Move segment ${i + 1} up" ${i === 0 ? 'disabled' : ''}>&uarr;</button>
         <button class="btn small icon" data-seg="down" aria-label="Move segment ${i + 1} down" ${i === t.segments.length - 1 ? 'disabled' : ''}>&darr;</button>
         <button class="btn small icon danger" data-seg="remove" aria-label="Remove segment ${i + 1}" ${t.segments.length === 1 ? 'disabled' : ''}>&times;</button>
       </div>
+      <label class="f-note"><span>Cue note (shown on stage)</span><input type="text" data-field="note" maxlength="80" autocomplete="off" placeholder="e.g. Slide 12, start the demo" value="${escapeHtml(s.note)}"></label>
     </li>`).join('');
   updateActiveRow(t);
   updateSegmentTotal(t);
@@ -1719,11 +1824,24 @@ function updateActiveRow(t) {
   });
 }
 
+/** When the chain would finish if nothing changes (0 when unknown: repeating or untimed timers). */
+function projectedFinishMs(t) {
+  const e = eng(t);
+  if (t.loop || e.status === 'finished' || !hasTarget(t)) return 0;
+  let cursor = Date.now() + Math.max(0, getRemainingMs(t));
+  for (let i = e.index + 1; i < t.segments.length; i++) {
+    const seg = t.segments[i];
+    cursor = seg.endAt ? Math.max(cursor + 1000, endTargetFor(seg, cursor)) : cursor + seg.duration * 1000;
+  }
+  return cursor;
+}
+
 function updateSegmentTotal(t) {
   const ui = rt(t).ui;
   if (!ui) return;
   const total = t.segments.reduce((sum, s) => sum + s.duration, 0);
-  ui.total.textContent = `${t.segments.length} segment${t.segments.length === 1 ? '' : 's'} · total ${formatDuration(total)}`;
+  const finish = projectedFinishMs(t);
+  setText(ui.total, `${t.segments.length} segment${t.segments.length === 1 ? '' : 's'} \u00b7 total ${formatDuration(total)}${finish ? ` \u00b7 finishes about ${formatTimeOfDay(finish)}` : ''}`);
 }
 
 function updateSelected() {
@@ -1743,12 +1861,16 @@ function commitSegments(t) {
   saveSettings();
   updateSegmentTotal(t);
   if (e.status === 'idle') resetTimer(t, { log: false });
-  else { if (e.status !== 'running') handleThresholds(t, getRemainingMs(t)); refresh(); }
+  else {
+    armSegment(t, Date.now() - getElapsedMs(t));     // re-measure an "ends at" segment from when it began
+    if (e.status !== 'running') handleThresholds(t, getRemainingMs(t));
+    refresh();
+  }
 }
 
 function addSegment(t) {
   if (t.segments.length >= MAX_SEGMENTS) { showToast(`Maximum of ${MAX_SEGMENTS} segments`); return; }
-  t.segments.push({ name: `Segment ${t.segments.length + 1}`, duration: 300, warn: settings.defaultWarn, red: settings.defaultRed });
+  t.segments.push({ name: `Segment ${t.segments.length + 1}`, duration: 300, warn: settings.defaultWarn, red: settings.defaultRed, endAt: '', note: '' });
   renderSegments(t);
   commitSegments(t);
   const rows = $$('.seg', rt(t).ui.segList);
@@ -1785,8 +1907,10 @@ function handleSegmentFieldChange(t, event) {
   if (!input) return;
   const seg = t.segments[+input.closest('.seg').dataset.index];
   const field = input.dataset.field;
-  if (field === 'name') {
-    seg.name = input.value.trim().slice(0, 40);
+  if (field === 'name' || field === 'note') {
+    seg[field] = input.value.trim().slice(0, field === 'name' ? 40 : 80);
+  } else if (field === 'endAt') {
+    seg.endAt = TIME_RE.test(input.value) ? input.value : '';
   } else {
     if (event.type === 'input') return;           // commit time fields on blur / Enter only
     const seconds = parseTimeInput(input.value);
@@ -1808,11 +1932,11 @@ function handleTimerFieldChange(t, event) {
     t.mode = input.value === 'up' ? 'up' : 'down';
     saveSettings();
     if (eng(t).status === 'idle') resetTimer(t, { log: false }); else refresh();
-  } else if (field === 'overtime' || field === 'autoAdvance') {
+  } else if (field === 'overtime' || field === 'autoAdvance' || field === 'loop') {
     t[field] = input.checked;
     saveSettings(); refresh();
   } else if (field === 'startAt') {
-    t.startAt = /^([01]\d|2[0-3]):[0-5]\d$/.test(input.value) ? input.value : '';
+    t.startAt = TIME_RE.test(input.value) ? input.value : '';
     rt(t).autoKey = '';
     saveSettings(); refresh();
   } else if (field === 'bgDim') {
@@ -1824,11 +1948,19 @@ function handleTimerFieldChange(t, event) {
   }
 }
 
+/** Show only this timer on the stage (or everything again). */
+function toggleSpotlight(t) {
+  spotlightTimer = spotlightTimer === t ? null : t;
+  showToast(spotlightTimer ? `Spotlight: ${timerName(t)}` : 'Showing all timers');
+  lastBroadcastKey = '';
+  refresh();
+}
+
 /* ----- Timer list structure: add / duplicate / remove / reorder ----- */
 function addTimer() {
   if (timers().length >= MAX_TIMERS) { showToast(`Maximum of ${MAX_TIMERS} timers`); return; }
-  const t = { label: `Timer ${timers().length + 1}`, mode: 'down', overtime: true, autoAdvance: true, startAt: '', bg: '', bgDim: 50,
-    segments: [{ name: 'Segment 1', duration: 300, warn: settings.defaultWarn, red: settings.defaultRed }] };
+  const t = { label: `Timer ${timers().length + 1}`, mode: 'down', overtime: true, autoAdvance: true, loop: false, startAt: '', bg: '', bgDim: 50,
+    segments: [{ name: 'Segment 1', duration: 300, warn: settings.defaultWarn, red: settings.defaultRed, endAt: '', note: '' }] };
   timers().push(t);
   afterTimerListChange(t);
   const input = $('[data-tfield="label"]', rt(t).ui.card);
@@ -1888,6 +2020,7 @@ function runTimerAction(t, action, event) {
     case 'addSegment':   addSegment(t); break;
     case 'moveUp':       moveTimerTo(t, timers().indexOf(t) - 1); focusAfterMove(t, 'moveUp'); break;
     case 'moveDown':     moveTimerTo(t, timers().indexOf(t) + 1); focusAfterMove(t, 'moveDown'); break;
+    case 'spotlight':    toggleSpotlight(t); break;
     case 'duplicate':    duplicateTimer(t); break;
     case 'removeTimer':  removeTimer(t); break;
     case 'bgRemove':     removeTimerBackground(t); break;
@@ -1992,6 +2125,9 @@ function syncSettingsUi() {
   $('#optSpeak').disabled = !canSpeak;
   $('#btnTestVoice').disabled = !canSpeak;
   $('#optVolume').value = settings.volume;
+  $('#optChime').value = settings.chime;
+  $('#optFont').value = settings.stageFont;
+  $('#optSafe').checked = settings.colorblind;
   $('#msgDuration').value = String(settings.messageSeconds);
   $('#optDefaultWarn').value = formatDuration(settings.defaultWarn);
   $('#optDefaultRed').value = formatDuration(settings.defaultRed);
@@ -2009,6 +2145,9 @@ function bindSettingsPanel() {
   toggle('#optClock', 'showClock');
   toggle('#optMs', 'showMs');
   toggle('#optSpeak', 'speak');
+  toggle('#optSafe', 'colorblind');
+  $('#optFont').addEventListener('change', (e) => { settings.stageFont = e.target.value; saveSettings(); refresh(); });
+  $('#optChime').addEventListener('change', (e) => { settings.chime = e.target.value; saveSettings(); playChime(3, true); });
   $('#optSound').addEventListener('change', (e) => { settings.sound = e.target.checked; ensureAudio(); saveSettings(); syncSettingsUi(); });
   $('#optVolume').addEventListener('input', (e) => { settings.volume = Number(e.target.value); saveSettings(); });
   $('#optVolume').addEventListener('change', () => playChime(1, true));
@@ -2155,7 +2294,7 @@ async function factoryReset() {
 
 /* ---------- 12. STAGE MODE, STAGE WINDOW, SYNC ------------------------- */
 const channel = ('BroadcastChannel' in window) ? new BroadcastChannel(CHANNEL_NAME) : null;
-const REMOTE_ACTIONS = ['toggleAll', 'resetAll', 'reset', 'add', 'sub', 'next', 'prev', 'undo', 'clearMessage'];
+const REMOTE_ACTIONS = ['toggleAll', 'resetAll', 'reset', 'add', 'sub', 'next', 'prev', 'undo', 'spotlight', 'clearMessage'];
 const isRemoteAction = (a) => REMOTE_ACTIONS.includes(a) || /^toggle:\d+$/.test(a);
 
 /** Control window -> stage window. Only sends when something visible changed. */
@@ -2227,6 +2366,7 @@ function runAction(action) {
     case 'resetAll':     pushUndo('Reset all'); timers().forEach(restartSequence); break;
     case 'reset': case 'next': case 'prev': case 'add': case 'sub': runTimerAction(selected, action); break;
     case 'undo':         undo(); break;
+    case 'spotlight':    toggleSpotlight(selected); break;
     case 'addTimer':     addTimer(); break;
     case 'stage':        toggleStageMode(); break;
     case 'popup':        openStageWindow(); break;
@@ -2264,6 +2404,11 @@ function handleKeydown(event) {
     case 'ArrowUp': case '+': case '=':    action = 'add'; break;
     case 'ArrowDown': case '-': case '_':  action = 'sub'; break;
     case 'u': case 'U': action = 'undo'; break;
+    case 's': case 'S': action = 'spotlight'; break;
+    // Presentation clickers send PageDown / PageUp / '.' (blank screen); only claim them in full screen
+    case 'PageDown': if (!document.body.classList.contains('stage-mode')) return; action = 'next'; break;
+    case 'PageUp':   if (!document.body.classList.contains('stage-mode')) return; action = 'prev'; break;
+    case '.':        if (!document.body.classList.contains('stage-mode')) return; action = 'toggleAll'; break;
     case 'f': case 'F': action = 'stage'; break;
     case 'm': case 'M': action = 'mute'; break;
     case 'c': case 'C': action = 'clearMessage'; break;
@@ -2297,7 +2442,12 @@ function bootstrapController() {
   // Once-a-second housekeeping, plus a 200 ms safety net for requestAnimationFrame
   // (which pauses in hidden or occluded windows) and a heartbeat for refresh recovery.
   setInterval(() => { if (anyRunning()) { tick(); updateDisplay(); } }, 200);
-  setInterval(() => { messageTick(); scheduleTick(); tickStageClock(); }, 1000);
+  setInterval(() => {
+    messageTick(); scheduleTick(); tickStageClock();
+    // Idle "ends at" segments show a length that changes with the clock
+    if (timers().some((t) => currentSegment(t).endAt && eng(t).status === 'idle')) updateDisplay();
+    timers().forEach(updateSegmentTotal);
+  }, 1000);
   setInterval(() => { if (anyLive()) persistRun(true); }, 5000);
 
   // Page Visibility: timestamps keep the clocks exact, so just resync instantly on return.
@@ -2369,9 +2519,9 @@ function bootstrapStageWindow() {
   document.body.classList.add('stage-only', 'stage-mode', 'hud-on');
   $('#hudExit').textContent = 'Fullscreen';
   applyTheme();
-  const waitingOpts = { showLabels: true, showEnds: false, showClock: false, message: '' };
+  const waitingOpts = { showLabels: true, showEnds: false, showClock: false, message: '', font: 'mono', palette: 'normal', spotlight: -1 };
   renderStage([{
-    index: 0, text: '--:--', ms: '', chars: 5, state: 'idle', status: 'idle', statusText: '', counter: '', next: '', progress: 0, endsAt: 0, bg: '', bgDim: 50,
+    index: 0, text: '--:--', ms: '', chars: 5, state: 'idle', status: 'idle', statusText: '', counter: '', next: '', note: '', progress: 0, endsAt: 0, bg: '', bgDim: 50,
     label: channel ? 'Waiting for the control window…' : 'Live sync is not supported in this browser'
   }], waitingOpts);
   layoutStage();
