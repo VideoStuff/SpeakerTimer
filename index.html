@@ -421,6 +421,78 @@ body:not(.stage-only) .tile { cursor: grab; }
 .stage-note:empty { display: none; }
 .btn.active { background: var(--accent); color: var(--on-accent); }
 .f-note { grid-column: 2 / -1; }
+
+/* ==========================================================================
+   9. RIDICULOUSNESS: mood emoji, racing mascot, final-10 heartbeat, overtime
+      meltdown (shake, emoji rain, police lights), confetti and party mode.
+      Everything stops under prefers-reduced-motion. Flashing stays at 1 Hz.
+   ========================================================================== */
+.stage-who { display: flex; align-items: baseline; gap: .35em; min-width: 0; }
+.stage-mood { font-size: 1.25em; line-height: 1; }
+.stage-mood:empty { display: none; }
+
+.track { position: relative; padding-top: max(5.5cqmin, 18px); }
+.stage[data-mascot="none"] .track { padding-top: 0; }
+.stage[data-mascot="none"] .mascot { display: none; }
+.mascot {
+  position: absolute; bottom: max(1.6cqmin, 5px); left: calc(.5em + var(--p, 0) * (100% - 1em));
+  font-size: max(5.5cqmin, 18px); line-height: 1; pointer-events: none;
+  transform: translateX(-50%) scaleX(var(--flip, 1)); transition: left .25s linear;
+}
+
+/* Last ten seconds: the clock beats like a heart */
+.tile[data-final="on"] .stage-time { animation: heartbeat 1s ease-in-out infinite; }
+@keyframes heartbeat {
+  0%, 52%, 100% { transform: scale(1); }
+  12% { transform: scale(var(--beat, 1.08)); }
+  24% { transform: scale(1); }
+  38% { transform: scale(calc(1 + (var(--beat, 1.08) - 1) * .6)); }
+}
+
+/* Overtime meltdown: the longer you are over, the harder the clock shakes */
+.stage[data-meltdown="on"] .tile[data-state="overtime"] .stage-inner { animation: shake .45s linear infinite; }
+@keyframes shake {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  20% { transform: translate(calc(var(--shake, 0) * 1cqmin), calc(var(--shake, 0) * -.6cqmin)) rotate(calc(var(--shake, 0) * .25deg)); }
+  40% { transform: translate(calc(var(--shake, 0) * -1cqmin), calc(var(--shake, 0) * .8cqmin)) rotate(calc(var(--shake, 0) * -.2deg)); }
+  60% { transform: translate(calc(var(--shake, 0) * .6cqmin), calc(var(--shake, 0) * .6cqmin)) rotate(calc(var(--shake, 0) * .15deg)); }
+  80% { transform: translate(calc(var(--shake, 0) * -.7cqmin), calc(var(--shake, 0) * -.9cqmin)) rotate(calc(var(--shake, 0) * -.25deg)); }
+}
+.rain { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; font-size: max(5cqmin, 16px); }
+.rain span { position: absolute; top: -12%; animation: fall linear infinite; }
+@keyframes fall { to { transform: translateY(125cqh) rotate(360deg); } }
+.stage[data-lights="on"] .tile[data-state="overtime"]::before,
+.stage[data-lights="on"] .tile[data-state="overtime"]::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 20%; z-index: 2; pointer-events: none;
+  animation: siren 1s steps(1, end) infinite;
+}
+.stage[data-lights="on"] .tile[data-state="overtime"]::before { left: 0; background: linear-gradient(90deg, #ff1f1f, transparent); }
+.stage[data-lights="on"] .tile[data-state="overtime"]::after { right: 0; background: linear-gradient(270deg, #1f5bff, transparent); animation-delay: -.5s; }
+@keyframes siren { 0% { opacity: .85; } 50% { opacity: .05; } }
+
+.fx-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; }
+
+/* Party mode: rainbow frame and a swinging disco ball (tiles keep their traffic-light colours) */
+.stage[data-party="on"] { padding: max(var(--gap), 1.6vmin); animation: party-hue 5s linear infinite; }
+@keyframes party-hue {
+  0% { background: hsl(0 90% 55%); border-color: hsl(0 90% 55%); }
+  17% { background: hsl(60 90% 55%); border-color: hsl(60 90% 55%); }
+  33% { background: hsl(120 90% 50%); border-color: hsl(120 90% 50%); }
+  50% { background: hsl(180 90% 50%); border-color: hsl(180 90% 50%); }
+  67% { background: hsl(240 90% 60%); border-color: hsl(240 90% 60%); }
+  83% { background: hsl(300 90% 55%); border-color: hsl(300 90% 55%); }
+  100% { background: hsl(360 90% 55%); border-color: hsl(360 90% 55%); }
+}
+.disco { display: none; position: absolute; top: -.15em; right: 3%; z-index: 6; font-size: max(8cqmin, 28px); line-height: 1; pointer-events: none; transform-origin: top center; animation: swing 3s ease-in-out infinite; }
+.stage[data-party="on"] .disco { display: block; }
+@keyframes swing { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(14deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tile[data-final="on"] .stage-time, .stage[data-meltdown="on"] .tile[data-state="overtime"] .stage-inner,
+  .stage[data-party="on"], .disco, .rain span, .stage[data-lights="on"] .tile::before, .stage[data-lights="on"] .tile::after { animation: none; }
+  .mascot { transition: none; }
+  .rain { display: none; }
+}
 </style>
 </head>
 <body>
@@ -449,6 +521,8 @@ body:not(.stage-only) .tile { cursor: grab; }
         <div class="stage" id="stage" data-labels="on" data-message="off" data-clock="off" role="group" aria-label="Timer display">
           <div class="stage-clock" id="stageClock" aria-hidden="true"></div>
           <div class="banner" id="banner" aria-hidden="true"></div>
+          <canvas class="fx-canvas" id="fxCanvas" aria-hidden="true"></canvas>
+          <div class="disco" aria-hidden="true">🪩</div>
         </div>
       </div>
 
@@ -462,7 +536,7 @@ body:not(.stage-only) .tile { cursor: grab; }
         <p class="hint mt">
           <kbd>Space</kbd> start/pause all &middot; <kbd>1</kbd>&ndash;<kbd>9</kbd> start/pause that timer &middot;
           <kbd>R</kbd> reset selected &middot; <kbd>N</kbd>/<kbd>P</kbd> next/prev &middot; <kbd>&uarr;</kbd>/<kbd>&darr;</kbd> &plusmn;1 min (selected timer) &middot;
-          <kbd>U</kbd> undo &middot; <kbd>S</kbd> spotlight the selected timer &middot; <kbd>F</kbd> stage &middot; <kbd>M</kbd> mute &middot; <kbd>C</kbd> clear message &middot; <kbd>Esc</kbd> exit stage.
+          <kbd>K</kbd> confetti &middot; <kbd>H</kbd> air horn &middot; <kbd>D</kbd> party &middot; <kbd>U</kbd> undo &middot; <kbd>S</kbd> spotlight the selected timer &middot; <kbd>F</kbd> stage &middot; <kbd>M</kbd> mute &middot; <kbd>C</kbd> clear message &middot; <kbd>Esc</kbd> exit stage.
           Drag timers (cards or stage tiles) to reorder them. In full screen, <kbd>PageDown</kbd>/<kbd>PageUp</kbd> (presentation clickers) go to the next/previous segment and <kbd>.</kbd> pauses or resumes.
         </p>
       </div>
@@ -512,7 +586,7 @@ body:not(.stage-only) .tile { cursor: grab; }
         </div>
         <div class="row" style="margin-bottom:10px">
           <label><span class="lbl">Chime sound</span><select id="optChime">
-            <option value="soft">Soft</option><option value="bell">Bell</option><option value="digital">Digital</option><option value="gong">Gong</option></select></label>
+            <option value="soft">Soft</option><option value="bell">Bell</option><option value="digital">Digital</option><option value="gong">Gong</option><option value="airhorn">Air horn</option><option value="trombone">Sad trombone</option><option value="applause">Applause</option></select></label>
           <label><span class="lbl">Stage digits font</span><select id="optFont">
             <option value="mono">Mono</option><option value="sans">Sans</option><option value="display">Heavy</option><option value="serif">Serif</option></select></label>
         </div>
@@ -522,6 +596,28 @@ body:not(.stage-only) .tile { cursor: grab; }
           <label><span class="lbl">Default red at (time left)</span><input type="text" inputmode="numeric" id="optDefaultRed" autocomplete="off"></label>
         </div>
         <p class="hint" style="margin-top:8px">Defaults apply to newly added segments.</p>
+      </section>
+
+      <section class="card">
+        <h2>Ridiculousness <small id="rideLabel"></small></h2>
+        <label class="lbl" for="optRide">Level: 0 is sensible, 11 is absurd</label>
+        <input type="range" id="optRide" min="0" max="11" step="1">
+        <label class="opt"><input type="checkbox" id="optConfetti"><span><b>Confetti cannons</b><small>Fire when a segment finishes on time.</small></span></label>
+        <label class="opt"><input type="checkbox" id="optMood"><span><b>Mood emoji</b><small>A face that goes from cool to terrified to deceased.</small></span></label>
+        <label class="opt"><input type="checkbox" id="optFinal"><span><b>Final-10 heartbeat</b><small>The clock pulses and ticks through the last ten seconds.</small></span></label>
+        <label class="opt"><input type="checkbox" id="optMelt"><span><b>Overtime meltdown</b><small>Shaking that gets worse every minute, falling emoji and (at 7+) police lights.</small></span></label>
+        <label class="opt"><input type="checkbox" id="optAloud"><span><b>Count the last 10 seconds aloud</b><small>Speaks "10, 9, 8..." from the control window.</small></span></label>
+        <label class="opt"><input type="checkbox" id="optParty"><span><b>Party mode</b><small>Rainbow frame and a disco ball.</small></span></label>
+        <div class="row" style="margin:8px 0 10px">
+          <label><span class="lbl">Racing mascot</span><select id="optMascot">
+            <option value="none">None</option><option value="rocket">Rocket</option><option value="turtle">Turtle</option>
+            <option value="runner">Runner</option><option value="snail">Snail</option><option value="ufo">Flying saucer</option><option value="horse">Racehorse</option></select></label>
+        </div>
+        <div class="row-inline">
+          <button class="btn small" data-action="confetti">Confetti cannon</button>
+          <button class="btn small" data-action="horn">Air horn</button>
+        </div>
+        <p class="hint mt">Level 0 switches every effect off. Motion effects also stay off if your system asks for reduced motion.</p>
       </section>
 
       <section class="card">
@@ -705,6 +801,7 @@ function createDefaultSettings() {
   return {
     theme: 'light',           // light (Paper) | dark (Ink) | contrast | auto
     sound: true, volume: 0.6, speak: false, chime: 'soft', stageFont: 'mono', colorblind: false,
+    ridiculous: 6, confetti: true, mood: true, mascot: 'rocket', meltdown: true, final10: true, countAloud: false, party: false,
     showMs: false, showLabels: true, showEnds: false, showClock: false,
     messageSeconds: 15, recentMessages: [],
     defaultWarn: 120, defaultRed: 30,
@@ -753,9 +850,17 @@ function sanitizeSettings(raw) {
     sound: raw.sound !== false,
     volume: clamp(Number(raw.volume ?? base.volume), 0, 1),
     speak: flag('speak'),
-    chime: ['soft', 'bell', 'digital', 'gong'].includes(raw.chime) ? raw.chime : base.chime,
+    chime: ['soft', 'bell', 'digital', 'gong', 'airhorn', 'trombone', 'applause'].includes(raw.chime) ? raw.chime : base.chime,
     stageFont: ['mono', 'sans', 'display', 'serif'].includes(raw.stageFont) ? raw.stageFont : base.stageFont,
     colorblind: flag('colorblind'),
+    ridiculous: clamp(Math.round(Number(raw.ridiculous ?? base.ridiculous)), 0, 11),
+    confetti: raw.confetti !== false,
+    mood: raw.mood !== false,
+    meltdown: raw.meltdown !== false,
+    final10: raw.final10 !== false,
+    mascot: ['none', 'rocket', 'turtle', 'runner', 'snail', 'ufo', 'horse'].includes(raw.mascot) ? raw.mascot : base.mascot,
+    countAloud: flag('countAloud'),
+    party: flag('party'),
     showMs: flag('showMs'),
     showLabels: raw.showLabels !== false,
     showEnds: flag('showEnds'),
@@ -810,7 +915,7 @@ function rt(timer) {
         logged: false,      // this segment is already in the run log
         fired: { warn: false, red: false, end: false }   // marks already announced
       },
-      ui: null, lastState: 'idle', autoKey: ''
+      ui: null, lastState: 'idle', autoKey: '', lastTick: 0
     };
     runtimes.set(timer, r);
   }
@@ -1036,15 +1141,18 @@ function tickTimer(t, now, events = []) {
   for (let guard = 0; guard < 200; guard++) {
     const remaining = getRemainingMs(t, now);
     const level = handleThresholds(t, remaining);
+    let event = null;
     if (level) {
       const seg = currentSegment(t);
-      events.push({ timer: t, level, seconds: level === 1 ? seg.warn : level === 2 ? seg.red : 0 });
+      event = { timer: t, level, seconds: level === 1 ? seg.warn : level === 2 ? seg.red : 0, outcome: '' };
+      events.push(event);
     }
     if (remaining > 0) break;
 
     const isLast = e.index >= t.segments.length - 1;
     if (t.autoAdvance && (!isLast || t.loop)) {
       // The next segment starts exactly when this one ended, so no time is lost or gained.
+      if (event) event.outcome = 'advance';
       logSegment(t, 'completed', getDurationMs(t));
       const endMoment = e.startedAt + (getDurationMs(t) - e.accumulated);
       if (isLast) { e.index = 0; e.laps += 1; } else e.index += 1;
@@ -1058,9 +1166,12 @@ function tickTimer(t, now, events = []) {
       continue;
     }
     if (!t.overtime) {
+      if (event) event.outcome = 'finish';
       logSegment(t, 'completed', getDurationMs(t));
       e.accumulated = getDurationMs(t);
       e.status = 'finished';
+    } else if (event) {
+      event.outcome = 'overtime';
     }
     break;
   }
@@ -1072,9 +1183,23 @@ function tick() {
   const now = Date.now();
   const events = [];
   timers().forEach((t) => tickTimer(t, now, events));
+  timers().forEach((t) => finalCountdown(t, now));
   if (!events.length) return;
   playChime(Math.max(...events.map((ev) => ev.level)));
   events.forEach(speakEvent);
+  if (events.some((ev) => ev.level === 3 && (ev.outcome === 'advance' || ev.outcome === 'finish'))) celebrate();
+}
+
+/** Ticks (and optionally counts aloud) through the last ten seconds of a running timer. */
+function finalCountdown(t, now) {
+  const r = rt(t);
+  if (eng(t).status !== 'running' || !hasTarget(t)) { r.lastTick = 0; return; }
+  const left = Math.ceil(getRemainingMs(t, now) / 1000);
+  if (left < 1 || left > 10) { r.lastTick = 0; return; }
+  if (r.lastTick === left) return;
+  r.lastTick = left;
+  if (fxOptions().final10) playTick(left);
+  if (settings.countAloud) speak(String(left));
 }
 
 /** Starts any idle timer whose "auto-start at" time has arrived (checked once a second). */
@@ -1200,6 +1325,117 @@ function playTone(frequency, startOffset, duration, volume, style) {
   });
 }
 
+let noiseBuffer = null;
+function getNoiseBuffer() {
+  if (!noiseBuffer) {
+    noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate, audioContext.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  return noiseBuffer;
+}
+
+/** A stack of detuned saws through a low-pass filter. */
+function playAirHorn(startOffset, duration, volume) {
+  const ctx = audioContext;
+  const start = ctx.currentTime + startOffset;
+  const filter = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  filter.type = 'lowpass';
+  filter.frequency.value = 2600;
+  gain.gain.setValueAtTime(0, start);
+  gain.gain.linearRampToValueAtTime(volume * 0.55, start + 0.03);
+  gain.gain.setValueAtTime(volume * 0.55, start + Math.max(0.03, duration - 0.1));
+  gain.gain.linearRampToValueAtTime(0, start + duration);
+  [466.16, 587.33, 698.46, 932.33].forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq * (1 + i * 0.002), start);
+    osc.frequency.linearRampToValueAtTime(freq * 0.97, start + duration);   // the pitch sags as the air runs out
+    osc.connect(filter);
+    osc.start(start);
+    osc.stop(start + duration + 0.05);
+  });
+  filter.connect(gain).connect(ctx.destination);
+}
+
+/** "Wah wah wah waaah": a muted saw with a wobbling last note. */
+function playTrombone(startOffset, notes, volume) {
+  const ctx = audioContext;
+  let at = ctx.currentTime + startOffset;
+  notes.forEach(([freq, length, slideTo], index) => {
+    const osc = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, at);
+    if (slideTo) osc.frequency.linearRampToValueAtTime(slideTo, at + length);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(500, at);
+    filter.frequency.linearRampToValueAtTime(1400, at + length * 0.35);
+    filter.frequency.linearRampToValueAtTime(500, at + length);
+    gain.gain.setValueAtTime(0, at);
+    gain.gain.linearRampToValueAtTime(volume * 0.5, at + 0.04);
+    gain.gain.setValueAtTime(volume * 0.5, at + length - 0.06);
+    gain.gain.linearRampToValueAtTime(0, at + length);
+    if (index === notes.length - 1 && notes.length > 1) {     // vibrato on the final note
+      const lfo = ctx.createOscillator();
+      const depth = ctx.createGain();
+      lfo.frequency.value = 5.5;
+      depth.gain.value = 7;
+      lfo.connect(depth).connect(osc.frequency);
+      lfo.start(at);
+      lfo.stop(at + length + 0.05);
+    }
+    osc.connect(filter).connect(gain).connect(ctx.destination);
+    osc.start(at);
+    osc.stop(at + length + 0.05);
+    at += length + 0.04;
+  });
+}
+
+/** Hundreds of tiny band-passed noise grains, swelling and fading like a crowd. */
+function playApplause(startOffset, duration, volume) {
+  const ctx = audioContext;
+  const start = ctx.currentTime + startOffset;
+  const grains = Math.round(duration * 70);
+  for (let i = 0; i < grains; i++) {
+    const at = start + Math.random() * duration;
+    const progress = (at - start) / duration;
+    const swell = Math.sin(Math.PI * Math.min(1, progress * 1.15)) ** 0.8;     // fade in, hold, fade out
+    const source = ctx.createBufferSource();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    source.buffer = getNoiseBuffer();
+    filter.type = 'bandpass';
+    filter.frequency.value = 1200 + Math.random() * 3200;
+    filter.Q.value = 0.8;
+    const length = 0.02 + Math.random() * 0.05;
+    gain.gain.setValueAtTime(volume * (0.25 + Math.random() * 0.75) * swell * 0.9, at);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + length);
+    source.connect(filter).connect(gain).connect(ctx.destination);
+    source.start(at, Math.random() * 0.8, length + 0.02);
+  }
+}
+
+/** A dry click for the final countdown; the last three are higher. */
+function playTick(secondsLeft) {
+  if (!settings.sound) return;
+  ensureAudio();
+  if (!audioContext || settings.volume <= 0) return;
+  const ctx = audioContext;
+  const start = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'square';
+  osc.frequency.value = secondsLeft <= 3 ? 1500 : 1000;
+  gain.gain.setValueAtTime(0.18 * settings.volume, start);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + (secondsLeft <= 3 ? 0.09 : 0.05));
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(start);
+  osc.stop(start + 0.12);
+}
+
 /** level 1 = yellow (one beep), 2 = red (two beeps), 3 = end (rising triad). */
 function playChime(level, force = false) {
   if (!settings.sound && !force) return;
@@ -1208,6 +1444,22 @@ function playChime(level, force = false) {
   const v = 0.35 * settings.volume;
   if (v <= 0) return;
   const style = settings.chime;
+  if (style === 'airhorn') {
+    if (level === 1) playAirHorn(0, 0.3, v);
+    else if (level === 2) { playAirHorn(0, 0.22, v); playAirHorn(0.32, 0.22, v); }
+    else playAirHorn(0, 1.4, v);
+    return;
+  }
+  if (style === 'trombone') {
+    if (level === 1) playTrombone(0, [[233.08, 0.5, 208]], v);
+    else if (level === 2) playTrombone(0, [[233.08, 0.4], [220, 0.5, 196]], v);
+    else playTrombone(0, [[233.08, 0.42], [220, 0.42], [207.65, 0.42], [196, 1.3, 170]], v);
+    return;
+  }
+  if (style === 'applause') {
+    playApplause(0, level === 1 ? 0.6 : level === 2 ? 1.2 : 3.2, v * 1.6);
+    return;
+  }
   const k = style === 'digital' ? 0.5 : 1;      // crisper, shorter notes for the digital style
   const note = (freq, at, length) => playTone(freq, at * k, length * k, v, style);
   if (level === 1) note(660, 0, 0.25);
@@ -1320,6 +1572,8 @@ function computeView(t, index) {
     next: nextSeg ? `Next: ${nextSeg.name || 'Segment ' + (e.index + 2)} · ${formatDuration(nextSeg.duration)}` : (total > 1 ? 'Final segment' : ''),
     progress: target ? clamp(elapsed / duration, 0, 1) : 0,
     endsAt: e.status === 'running' && target && remaining > 0 ? Math.round(e.startedAt + (duration - e.accumulated)) : 0,
+    over: state === 'overtime' ? Math.floor(-remaining / 1000) : 0,       // seconds past zero
+    final: e.status === 'running' && remaining > 0 && remaining <= 10000,  // inside the last ten seconds
     canAdjust: target,
     canNext: e.index < total - 1
   };
@@ -1333,16 +1587,16 @@ function createTile() {
   el.className = 'tile';
   el.draggable = !IS_STAGE_WINDOW;
   el.innerHTML = `<div class="tile-bg" data-r="bg" aria-hidden="true"></div><div class="stage-inner">
-    <div class="stage-top"><span class="stage-label" data-r="label"></span><span class="stage-counter" data-r="counter"></span></div>
+    <div class="stage-top"><span class="stage-who"><span class="stage-mood" data-r="mood" aria-hidden="true"></span><span class="stage-label" data-r="label"></span></span><span class="stage-counter" data-r="counter"></span></div>
     <div class="stage-time"><span data-r="digits">00:00</span><span class="ms" data-r="ms"></span></div>
     <div class="stage-bottom">
       <div class="stage-note" data-r="note"></div>
-      <div class="progress" aria-hidden="true"><div class="progress-fill" data-r="progress"></div></div>
+      <div class="track"><div class="progress" aria-hidden="true"><div class="progress-fill" data-r="progress"></div></div><span class="mascot" data-r="mascot" aria-hidden="true"></span></div>
       <div class="stage-info"><span class="stage-status" data-r="status"></span><span data-r="next"></span></div>
     </div></div>`;
   const ref = (name) => $(`[data-r="${name}"]`, el);
   return { el, bgEl: ref('bg'), label: ref('label'), counter: ref('counter'), digits: ref('digits'), ms: ref('ms'),
-           status: ref('status'), next: ref('next'), progress: ref('progress'), note: ref('note') };
+           status: ref('status'), next: ref('next'), progress: ref('progress'), note: ref('note'), mood: ref('mood'), mascot: ref('mascot'), rain: null };
 }
 
 /** Picks the column count whose tiles are closest to a comfortable clock shape. */
@@ -1370,7 +1624,8 @@ function layoutStage() {
 /** What the stage shows besides the tiles. Sent to the stage window with every update. */
 const stageOptions = () => ({
   showLabels: settings.showLabels, showEnds: settings.showEnds, showClock: settings.showClock, message: messageState.text,
-  font: settings.stageFont, palette: settings.colorblind ? 'safe' : 'normal', spotlight: timers().indexOf(spotlightTimer)
+  font: settings.stageFont, palette: settings.colorblind ? 'safe' : 'normal', spotlight: timers().indexOf(spotlightTimer),
+  fx: fxOptions()
 });
 
 /** Draws timer views onto the stage. Used by the control window and the stage window alike. */
@@ -1381,6 +1636,16 @@ function renderStage(views, opts) {
   if (stageEl.dataset.font !== (opts.font || 'mono')) stageEl.dataset.font = opts.font || 'mono';
   const palette = opts.palette || 'normal';
   if (document.documentElement.dataset.palette !== palette) document.documentElement.dataset.palette = palette;
+  const fx = opts.fx || NO_FX;
+  const setFlag = (name, on) => { const value = on ? 'on' : 'off'; if (stageEl.dataset[name] !== value) stageEl.dataset[name] = value; };
+  setFlag('meltdown', fx.meltdown);
+  setFlag('lights', fx.lights);
+  setFlag('party', fx.party);
+  if (stageEl.dataset.mascot !== fx.mascot) stageEl.dataset.mascot = fx.mascot;
+  if (stageEl._level !== fx.level) {
+    stageEl._level = fx.level;
+    stageEl.style.setProperty('--beat', (1 + fx.level * 0.012).toFixed(3));
+  }
   if (opts.message) setText(bannerEl, opts.message);        // keep the words while the banner slides away
   if (stageEl.dataset.message !== flag(opts.message)) stageEl.dataset.message = flag(opts.message);
 
@@ -1411,11 +1676,147 @@ function renderStage(views, opts) {
     setText(tile.status, v.statusText);
     setText(tile.next, v.next);
     setText(tile.note, v.note || '');
+    setText(tile.mood, fx.mood ? moodFor(v) : '');
+    const mascot = mascotFor(fx.mascot, v);
+    setText(tile.mascot, mascot.glyph);
+    if (tile._flip !== mascot.flip) { tile._flip = mascot.flip; tile.el.style.setProperty('--flip', mascot.flip); }
+    const final = fx.final10 && v.final ? 'on' : 'off';
+    if (tile.el.dataset.final !== final) tile.el.dataset.final = final;
+    const shake = (fx.level * 0.09 * (1 + Math.min((v.over || 0) / 60, 4))).toFixed(2);
+    if (tile._shake !== shake) { tile._shake = shake; tile.el.style.setProperty('--shake', shake); }
+    updateRain(tile, fx.meltdown && v.state === 'overtime', fx.level);
     if (tile._chars !== v.chars) { tile._chars = v.chars; tile.el.style.setProperty('--chars', v.chars); }
     const scale = v.progress.toFixed(4);
-    if (tile._scale !== scale) { tile._scale = scale; tile.progress.style.transform = `scaleX(${scale})`; }
+    if (tile._scale !== scale) { tile._scale = scale; tile.progress.style.transform = `scaleX(${scale})`; tile.el.style.setProperty('--p', scale); }
   });
   if (layoutNeeded) layoutStage();
+}
+
+/* ----- Ridiculous extras ----- */
+const NO_FX = { level: 0, mood: false, mascot: 'none', meltdown: false, final10: false, party: false, lights: false };
+const MASCOTS = { rocket: ['\u{1F680}', 1], turtle: ['\u{1F422}', -1], runner: ['\u{1F3C3}', -1], snail: ['\u{1F40C}', 1], ufo: ['\u{1F6F8}', 1], horse: ['\u{1F40E}', -1] };
+const RAIN_EMOJI = ['\u{1F6A8}', '\u{1F525}', '\u{1F480}', '\u23F0', '\u{1F631}', '\u{1FAE0}'];
+const RIDE_NAMES = ['Sensible', 'Playful', 'Playful', 'Playful', 'Spirited', 'Spirited', 'Spirited', 'Unhinged', 'Unhinged', 'Unhinged', 'Absurd', 'Spinal Tap'];
+const prefersReducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+/** The effect switches actually in force: level 0 is the master "off". */
+function fxOptions() {
+  const level = settings.ridiculous;
+  const on = level > 0;
+  return {
+    level, mood: on && settings.mood, mascot: on ? settings.mascot : 'none', meltdown: on && settings.meltdown,
+    final10: on && settings.final10, party: on && settings.party, lights: on && settings.meltdown && level >= 7
+  };
+}
+
+function moodFor(v) {
+  if (v.state === 'overtime') return v.over < 60 ? '\u{1F480}' : v.over < 180 ? '\u2620\uFE0F' : '\u{1FAA6}';
+  return { idle: '\u{1F60C}', green: '\u{1F60E}', yellow: '\u{1F62C}', red: '\u{1F631}', finished: '\u{1F973}' }[v.state] || '';
+}
+
+function mascotFor(name, v) {
+  if (name === 'none' || !MASCOTS[name]) return { glyph: '', flip: 1 };
+  if (v.state === 'overtime') return { glyph: '\u{1F4A5}', flip: 1 };      // it crashed
+  if (v.state === 'finished') return { glyph: '\u{1F3C1}', flip: 1 };      // it made it
+  return { glyph: MASCOTS[name][0], flip: MASCOTS[name][1] };
+}
+
+/** Emoji fall through a tile while its timer is in overtime. */
+function updateRain(tile, on, level) {
+  const wanted = on && !prefersReducedMotion();
+  if (tile.rain && (!wanted || tile._rainLevel !== level)) { tile.rain.remove(); tile.rain = null; }
+  if (!wanted || tile.rain) return;
+  const box = document.createElement('div');
+  box.className = 'rain';
+  box.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < 3 + level * 2; i++) {
+    const drop = document.createElement('span');
+    drop.textContent = RAIN_EMOJI[Math.floor(Math.random() * RAIN_EMOJI.length)];
+    drop.style.left = `${Math.random() * 94}%`;
+    drop.style.fontSize = `${0.7 + Math.random() * 0.9}em`;
+    drop.style.animationDuration = `${2.2 + Math.random() * 3}s`;
+    drop.style.animationDelay = `${-Math.random() * 5}s`;
+    box.appendChild(drop);
+  }
+  tile.el.appendChild(box);
+  tile.rain = box;
+  tile._rainLevel = level;
+}
+
+/* Confetti: two cannons in the bottom corners, drawn on a canvas over the stage. */
+const fxCanvas = $('#fxCanvas');
+let confetti = [];
+let confettiFrame = 0;
+let confettiLast = 0;
+
+function fireConfetti(level = 6) {
+  if (prefersReducedMotion() || level <= 0) return;
+  const w = stageEl.clientWidth;
+  const h = stageEl.clientHeight;
+  if (!w || !h) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (fxCanvas.width !== Math.round(w * dpr) || fxCanvas.height !== Math.round(h * dpr)) {
+    fxCanvas.width = Math.round(w * dpr);
+    fxCanvas.height = Math.round(h * dpr);
+  }
+  const colors = ['#ff3b30', '#ffd60a', '#34c759', '#0a84ff', '#bf5af2', '#ff9f0a', '#ffffff'];
+  const scale = clamp(h / 700, 0.6, 1.6);
+  for (let i = 0; i < 30 + level * 30; i++) {
+    const fromLeft = i % 2 === 0;
+    const angle = ((fromLeft ? -62 : -118) * Math.PI) / 180 + (Math.random() - 0.5) * 0.7;
+    const speed = h * (0.9 + Math.random() * 1.1);
+    confetti.push({
+      x: fromLeft ? 0 : w, y: h, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 14, size: (5 + Math.random() * 7) * scale,
+      color: colors[Math.floor(Math.random() * colors.length)], round: Math.random() < 0.3,
+      life: 2.6 + Math.random() * 1.8, age: 0
+    });
+  }
+  if (!confettiFrame) { confettiLast = performance.now(); confettiFrame = requestAnimationFrame(stepConfetti); }
+}
+
+function stepConfetti(now) {
+  const dt = Math.min(0.05, (now - confettiLast) / 1000);
+  confettiLast = now;
+  const w = stageEl.clientWidth;
+  const h = stageEl.clientHeight;
+  const ctx = fxCanvas.getContext('2d');
+  ctx.setTransform(fxCanvas.width / w, 0, 0, fxCanvas.height / h, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  confetti = confetti.filter((p) => p.age < p.life);
+  confetti.forEach((p) => {
+    p.age += dt;
+    p.vy += h * 1.6 * dt;                         // gravity
+    p.vx *= 0.992;
+    p.vy *= 0.992;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.rot += p.spin * dt;
+    ctx.globalAlpha = Math.min(1, (p.life - p.age) / 0.8);
+    ctx.fillStyle = p.color;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    if (p.round) { ctx.beginPath(); ctx.arc(0, 0, p.size / 2, 0, 6.28); ctx.fill(); }
+    else ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.66);
+    ctx.restore();
+  });
+  ctx.globalAlpha = 1;
+  if (confetti.length) confettiFrame = requestAnimationFrame(stepConfetti);
+  else { confettiFrame = 0; ctx.clearRect(0, 0, w, h); }
+}
+
+/** Tells the stage window to fire its own confetti. */
+function sendFx(kind) {
+  if (channel && !IS_STAGE_WINDOW) { try { channel.postMessage({ type: 'fx', kind, level: Math.max(settings.ridiculous, 4) }); } catch (error) { /* ignore */ } }
+}
+
+/** A segment just finished cleanly: cannons! */
+function celebrate() {
+  const fx = fxOptions();
+  if (!fx.level || !settings.confetti) return;
+  fireConfetti(fx.level);
+  sendFx('confetti');
 }
 
 function tickStageClock() {
@@ -2128,6 +2529,16 @@ function syncSettingsUi() {
   $('#optChime').value = settings.chime;
   $('#optFont').value = settings.stageFont;
   $('#optSafe').checked = settings.colorblind;
+  $('#optRide').value = settings.ridiculous;
+  $('#rideLabel').textContent = `${settings.ridiculous} \u00b7 ${RIDE_NAMES[settings.ridiculous]}`;
+  $('#optConfetti').checked = settings.confetti;
+  $('#optMood').checked = settings.mood;
+  $('#optFinal').checked = settings.final10;
+  $('#optMelt').checked = settings.meltdown;
+  $('#optAloud').checked = settings.countAloud && canSpeak;
+  $('#optAloud').disabled = !canSpeak;
+  $('#optParty').checked = settings.party;
+  $('#optMascot').value = settings.mascot;
   $('#msgDuration').value = String(settings.messageSeconds);
   $('#optDefaultWarn').value = formatDuration(settings.defaultWarn);
   $('#optDefaultRed').value = formatDuration(settings.defaultRed);
@@ -2146,6 +2557,19 @@ function bindSettingsPanel() {
   toggle('#optMs', 'showMs');
   toggle('#optSpeak', 'speak');
   toggle('#optSafe', 'colorblind');
+  toggle('#optConfetti', 'confetti');
+  toggle('#optMood', 'mood');
+  toggle('#optFinal', 'final10');
+  toggle('#optMelt', 'meltdown');
+  toggle('#optAloud', 'countAloud');
+  toggle('#optParty', 'party');
+  $('#optMascot').addEventListener('change', (e) => { settings.mascot = e.target.value; saveSettings(); refresh(); });
+  $('#optRide').addEventListener('input', (e) => {
+    settings.ridiculous = Number(e.target.value);
+    $('#rideLabel').textContent = `${settings.ridiculous} \u00b7 ${RIDE_NAMES[settings.ridiculous]}`;
+    saveSettings();
+    refresh();
+  });
   $('#optFont').addEventListener('change', (e) => { settings.stageFont = e.target.value; saveSettings(); refresh(); });
   $('#optChime').addEventListener('change', (e) => { settings.chime = e.target.value; saveSettings(); playChime(3, true); });
   $('#optSound').addEventListener('change', (e) => { settings.sound = e.target.checked; ensureAudio(); saveSettings(); syncSettingsUi(); });
@@ -2294,7 +2718,7 @@ async function factoryReset() {
 
 /* ---------- 12. STAGE MODE, STAGE WINDOW, SYNC ------------------------- */
 const channel = ('BroadcastChannel' in window) ? new BroadcastChannel(CHANNEL_NAME) : null;
-const REMOTE_ACTIONS = ['toggleAll', 'resetAll', 'reset', 'add', 'sub', 'next', 'prev', 'undo', 'spotlight', 'clearMessage'];
+const REMOTE_ACTIONS = ['toggleAll', 'resetAll', 'reset', 'add', 'sub', 'next', 'prev', 'undo', 'spotlight', 'confetti', 'horn', 'party', 'clearMessage'];
 const isRemoteAction = (a) => REMOTE_ACTIONS.includes(a) || /^toggle:\d+$/.test(a);
 
 /** Control window -> stage window. Only sends when something visible changed. */
@@ -2367,6 +2791,13 @@ function runAction(action) {
     case 'reset': case 'next': case 'prev': case 'add': case 'sub': runTimerAction(selected, action); break;
     case 'undo':         undo(); break;
     case 'spotlight':    toggleSpotlight(selected); break;
+    case 'confetti':     fireConfetti(Math.max(settings.ridiculous, 4)); sendFx('confetti'); break;
+    case 'horn':
+      if (!settings.sound) { showToast('Sound is muted'); break; }
+      ensureAudio();
+      if (audioContext) playAirHorn(0, 1.2, 0.2 * settings.volume);
+      break;
+    case 'party':        settings.party = !settings.party; saveSettings(); syncSettingsUi(); refresh(); break;
     case 'addTimer':     addTimer(); break;
     case 'stage':        toggleStageMode(); break;
     case 'popup':        openStageWindow(); break;
@@ -2405,6 +2836,9 @@ function handleKeydown(event) {
     case 'ArrowDown': case '-': case '_':  action = 'sub'; break;
     case 'u': case 'U': action = 'undo'; break;
     case 's': case 'S': action = 'spotlight'; break;
+    case 'k': case 'K': action = 'confetti'; break;
+    case 'h': case 'H': action = 'horn'; break;
+    case 'd': case 'D': action = 'party'; break;
     // Presentation clickers send PageDown / PageUp / '.' (blank screen); only claim them in full screen
     case 'PageDown': if (!document.body.classList.contains('stage-mode')) return; action = 'next'; break;
     case 'PageUp':   if (!document.body.classList.contains('stage-mode')) return; action = 'prev'; break;
@@ -2519,7 +2953,7 @@ function bootstrapStageWindow() {
   document.body.classList.add('stage-only', 'stage-mode', 'hud-on');
   $('#hudExit').textContent = 'Fullscreen';
   applyTheme();
-  const waitingOpts = { showLabels: true, showEnds: false, showClock: false, message: '', font: 'mono', palette: 'normal', spotlight: -1 };
+  const waitingOpts = { showLabels: true, showEnds: false, showClock: false, message: '', font: 'mono', palette: 'normal', spotlight: -1, fx: NO_FX };
   renderStage([{
     index: 0, text: '--:--', ms: '', chars: 5, state: 'idle', status: 'idle', statusText: '', counter: '', next: '', note: '', progress: 0, endsAt: 0, bg: '', bgDim: 50,
     label: channel ? 'Waiting for the control window…' : 'Live sync is not supported in this browser'
@@ -2536,6 +2970,8 @@ function bootstrapStageWindow() {
       if (msg.type === 'images' && msg.images) {
         Object.entries(msg.images).forEach(([id, url]) => imageCache.set(id, url));
         if (lastView) renderStage(lastView.views, lastView.opts);
+      } else if (msg.type === 'fx') {
+        if (msg.kind === 'confetti') fireConfetti(msg.level);
       } else if (msg.type === 'view') {
         received = true;
         lastView = msg;

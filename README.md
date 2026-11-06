@@ -10,10 +10,14 @@ open `index.html` or host it anywhere (GitHub Pages works).
 - **Traffic-light stage display**: green, yellow and red at thresholds you set per segment, then a
   flashing overtime counter. Full screen (`F`) or in a separate stage window for a projector.
 - **Message to the speaker**, cue notes per segment, time-of-day clock, end times, spotlight one timer.
-- **Chimes** (soft, bell, digital, gong) and optional **spoken alerts**.
+- **Chimes** (soft, bell, digital, gong, air horn, sad trombone, applause) and optional **spoken alerts**.
 - **Safety nets**: refresh recovery, undo, run log with CSV export, backup and restore as JSON.
 - **Scheduling**: auto-start at a time of day, segments that end at a fixed clock time, repeating chains.
 - **Looks**: Paper, Ink and High-contrast themes, background pictures, colour-blind-safe palette, digit fonts.
+- **Ridiculousness dial (0 to 11)**: mood emoji, a racing mascot (the rocket crashes in overtime), a heartbeat and
+  ticks through the last ten seconds, an overtime meltdown (shaking that worsens every minute, falling emoji, police
+  lights), confetti cannons when a segment finishes on time, air horn / sad trombone / applause chimes and a party mode.
+  Level 0 turns every effect off.
 
 ## Keyboard
 
@@ -28,6 +32,7 @@ open `index.html` or host it anywhere (GitHub Pages works).
 | `S` | spotlight the selected timer on the stage |
 | `F` / `Esc` | full-screen stage / leave it |
 | `M` | mute |
+| `K` / `H` / `D` | confetti cannon / air horn / party mode |
 | `C` | clear the message on stage |
 | `PageDown` `PageUp` `.` | in full screen: next / previous / pause (presentation clickers) |
 
